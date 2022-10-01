@@ -52,6 +52,16 @@ import org.firstinspires.ftc.robotcore.external.navigation.Velocity;
 import java.io.*;
 import java.util.*;
 
+/* TODO:
+- Add precise/slow mode
+- Make rotation in 90 degree increments in fast mode
+- Make an actually good acceleration integrator to calculate position based on IMU readings
+- Make something to identify the bot's location using cameras
+    - Use edge detection to identify borders of the images set up around the field?
+- Use TensorFlow Object Detection to identify cones
+*/
+
+// This class operates the wheels by interfacing with the gamepad and calculates motion/location data for the drive train.
 @TeleOp(name="Drive Train", group="Linear Opmode")
 public class DriveTrain extends LinearOpMode {
 
@@ -69,7 +79,7 @@ public class DriveTrain extends LinearOpMode {
     private double[] turnMap = {-1, -1, 1, 1};
 
     public OpenGLMatrix transformMatrix = OpenGLMatrix.identityMatrix();
-    private VectorF movementVector = new VectorF(); // in the bot's local space
+    private VectorF movementVector = new VectorF(0, 0, 0); // in the bot's local space
 
     // yeah bro
     private void applyMovementVector() {
@@ -94,7 +104,7 @@ public class DriveTrain extends LinearOpMode {
     }
 
     public VectorF getWorldMovementVector() {
-        return new VectorF();
+        return new VectorF(0, 0, 0);
     }
 
     public VectorF getLocalMovementVector() {
@@ -104,8 +114,9 @@ public class DriveTrain extends LinearOpMode {
     @Override
     public void runOpMode() {
 
-        // Initialize the hardware variables. Note that the strings used here must correspond
-        // to the names assigned during the robot configuration step on the DS or RC devices.
+        ///////////////////////
+        // WHEEL SETUP BEGIN //
+        ///////////////////////
         topRightWheel  = hardwareMap.get(DcMotor.class, "TopRightWheel");
         bottomRightWheel  = hardwareMap.get(DcMotor.class, "BottomRightWheel");
         topLeftWheel = hardwareMap.get(DcMotor.class, "TopLeftWheel");
@@ -113,11 +124,13 @@ public class DriveTrain extends LinearOpMode {
 
         wheelMap = new DcMotor[]{topRightWheel, bottomRightWheel, topLeftWheel, bottomLeftWheel};
 
-        //
         topRightWheel.setDirection(DcMotor.Direction.FORWARD);
         bottomRightWheel.setDirection(DcMotor.Direction.FORWARD);
         topLeftWheel.setDirection(DcMotor.Direction.REVERSE);
         bottomLeftWheel.setDirection(DcMotor.Direction.REVERSE);
+        /////////////////////
+        // WHEEL SETUP END //
+        ////////////////////
 
         /////////////////////
         // IMU SETUP BEGIN //
@@ -159,7 +172,7 @@ public class DriveTrain extends LinearOpMode {
             // Show the elapsed game time and wheel power.
             telemetry.addData("Status", "Run Time: " + runtime.toString());
             telemetry.addData("Local Movement Vector", movementVector);
-            telemetry.addData("Orientation", orientation);
+            telemetry.addData("Orientation", currentOrientation.toString());
             telemetry.update();
         }
     }}
