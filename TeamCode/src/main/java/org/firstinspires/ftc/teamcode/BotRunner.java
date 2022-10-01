@@ -71,7 +71,7 @@ public class DriveTrain extends LinearOpMode {
     public OpenGLMatrix transformMatrix = OpenGLMatrix.identityMatrix();
     private VectorF movementVector = new VectorF(); // in the bot's local space
 
-    // yeah
+    // yeah bro
     private void applyMovementVector() {
         VectorF up = transformMatrix.getColumn(2); // x = 0, y = 1, z = 2?
         movementVector = movementVector.subtracted(movementVector.multiplied(movementVector.dotProduct(up)));
