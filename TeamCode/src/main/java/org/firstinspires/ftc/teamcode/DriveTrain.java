@@ -75,37 +75,76 @@ public class DriveTrain extends LinearOpMode {
     private BNO055IMU imu;
 
     private DcMotor[] wheelMap;
+    private double[] wheelPowers = {0, 0, 0, 0};
     private double[] axialMovementMap = {-1, -1, -1, -1};
     private double[] lateralMovementMap = {-1, 1, 1, -1};
-    private double[] turnMap = {-1, -1, 1, 1};
+    private double[] turnMap = {1, 1, -1, -1};
 
     public OpenGLMatrix transformMatrix = OpenGLMatrix.identityMatrix();
-    private VectorF movementVector = new VectorF(0, 0, 0); // in the bot's local space
+    private VectorF movementVector = new VectorF(0, 0, 0, 1); // in the bot's local space
+    private double targetRotation = 0;
+    private OpenGLMatrix targetTransformMatrix = OpenGLMatrix.identityMatrix();
+    private double rotation = 0;
+    private double rotationDampeningThreshold = 45;
+    private double rotationPower = 0.6;
+    private double lastRotationTime = 0;
+    private boolean lastLBumper = false;
+    private boolean lastRBumper = false;
+
+    private double modulo(double a, double b) {
+        return  (a % b + b) % b;
+    }
+
+    private double normalizeAngle(double angle) {
+        return modulo((angle + 180), 360) - 180;
+    }
+
+    private double Lerp(double a, double b, double alpha) {
+        return a + (b - a) * alpha;
+    }
 
     // yeah bro
-    private void applyMovementVector() {
+    private void applyMovement() {
         VectorF up = transformMatrix.getColumn(2); // x = 0, y = 1, z = 2?
-        movementVector = movementVector.subtracted(movementVector.multiplied(movementVector.dotProduct(up)));
-        float axialMovement = movementVector.get(0);
-        float lateralMovement = movementVector.get(1);
+        //movementVector = movementVector.subtracted(movementVector.multiplied(movementVector.dotProduct(up)));
+        float axialMovement = movementVector.get(1);
+        float lateralMovement = movementVector.get(0);
+        float turnDiff = (float) normalizeAngle(targetRotation - rotation);
+        telemetry.addData("turn diff", turnDiff);
+        float turn = (float) (Math.max(Math.min(turnDiff, rotationDampeningThreshold), -rotationDampeningThreshold)/rotationDampeningThreshold * rotationPower);
+        double maxPowerMagnitude = 1;
         for (int i = 0; i < 4; i++) {
-            double wheelPower = (double) (axialMovementMap[i] * axialMovement + lateralMovementMap[i] * lateralMovement);
-            wheelMap[i].setPower(wheelPower);
+            wheelPowers[i] = (double) (axialMovementMap[i] * axialMovement + lateralMovementMap[i] * lateralMovement + turnMap[i] * turn);
+            maxPowerMagnitude = Math.max(maxPowerMagnitude, wheelPowers[i]);
+        }
+        for (int i = 0; i < 4; i++) {
+            wheelPowers[i] = wheelPowers[i]/maxPowerMagnitude;
+            wheelMap[i].setPower(wheelPowers[i]);
         }
     }
 
+    public void setTargetRotation(double target) {
+        targetRotation = target;
+        targetRotation = normalizeAngle(targetRotation);
+    }
+
     public void setWorldMovementVector(VectorF vector) {
-        movementVector = transformMatrix.transposed().multiplied(vector);
-        applyMovementVector();
+        movementVector = transformMatrix.multiplied(vector);
+        applyMovement();
+    }
+
+    public void setMovementVectorRelativeToTargetOrientation(VectorF vector) {
+        vector = targetTransformMatrix.inverted().multiplied(vector);
+        setWorldMovementVector(vector);
     }
 
     public void setLocalMovementVector(VectorF vector) {
         movementVector = vector;
-        applyMovementVector();
+        applyMovement();
     }
 
     public VectorF getWorldMovementVector() {
-        return new VectorF(0, 0, 0);
+        return new VectorF(0, 0, 0, 1);
     }
 
     public VectorF getLocalMovementVector() {
@@ -162,18 +201,32 @@ public class DriveTrain extends LinearOpMode {
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
 
-            setLocalMovementVector(new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0));
-            applyMovementVector();
-
+            targetRotation = normalizeAngle(targetRotation);
             Orientation currentOrientation = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES);
+            rotation = currentOrientation.firstAngle;
+
             transformMatrix = currentOrientation.getRotationMatrix();
+            Orientation targetOrientation = new Orientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES, (float) targetRotation, 0, 0, 0);
+            targetTransformMatrix = targetOrientation.getRotationMatrix();
 
+            if (gamepad1.left_bumper == true && lastLBumper == false) {
+                setTargetRotation(targetRotation + 90);
+            }
+            if (gamepad1.right_bumper == true && lastRBumper == false) {
+                setTargetRotation(targetRotation - 90);
+            }
 
+            setMovementVectorRelativeToTargetOrientation(new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0, 1));
+            applyMovement();
 
+            lastRotationTime = runtime.seconds();
+            lastLBumper = gamepad1.left_bumper;
+            lastRBumper = gamepad1.right_bumper;
             // Show the elapsed game time and wheel power.
             telemetry.addData("Status", "Run Time: " + runtime.toString());
             telemetry.addData("Local Movement Vector", movementVector);
             telemetry.addData("Orientation", currentOrientation.toString());
+            telemetry.addData("Target Rotation", targetRotation);
             telemetry.update();
         }
     }}
