@@ -80,10 +80,13 @@ public class DriveTrain extends LinearOpMode {
     private double[] lateralMovementMap = {-1, 1, 1, -1};
     private double[] turnMap = {1, 1, -1, -1};
     private double freeMoveSpeed = 0.25;
-    private double freeTurnSpeed = 45;
+    private double freeTurnSpeed = 0.25;
+    private double masterPower = 0.9;
 
     public OpenGLMatrix transformMatrix = OpenGLMatrix.identityMatrix();
     private VectorF movementVector = new VectorF(0, 0, 0, 1); // in the bot's local space
+    private double turnVelocity = 0;
+
     private double targetRotation = 0;
     private OpenGLMatrix targetTransformMatrix = OpenGLMatrix.identityMatrix();
     private double rotation = 0;
@@ -113,23 +116,32 @@ public class DriveTrain extends LinearOpMode {
         //movementVector = movementVector.subtracted(movementVector.multiplied(movementVector.dotProduct(up)));
         float axialMovement = movementVector.get(1);
         float lateralMovement = movementVector.get(0);
-        float turnDiff = (float) normalizeAngle(targetRotation - rotation);
-        telemetry.addData("turn diff", turnDiff);
-        float turn = (float) (Math.max(Math.min(turnDiff, rotationDampeningThreshold), -rotationDampeningThreshold)/rotationDampeningThreshold * rotationPower);
         double maxPowerMagnitude = 1;
         for (int i = 0; i < 4; i++) {
-            wheelPowers[i] = (double) (axialMovementMap[i] * axialMovement + lateralMovementMap[i] * lateralMovement + turnMap[i] * turn);
+            wheelPowers[i] = (double) (axialMovementMap[i] * axialMovement + lateralMovementMap[i] * lateralMovement + turnMap[i] * turnVelocity);
             maxPowerMagnitude = Math.max(maxPowerMagnitude, wheelPowers[i]);
         }
         for (int i = 0; i < 4; i++) {
             wheelPowers[i] = wheelPowers[i]/maxPowerMagnitude;
-            wheelMap[i].setPower(wheelPowers[i]);
+            wheelMap[i].setPower(wheelPowers[i] * masterPower);
         }
+    }
+
+    public void setTurnVelocity(double vel) {
+        turnVelocity = vel;
+        applyMovement();
+    }
+
+    public void applyTargetRotation() {
+        float turnDiff = (float) normalizeAngle(targetRotation - rotation);
+        telemetry.addData("turn diff", turnDiff);
+        setTurnVelocity((float) (Math.max(Math.min(turnDiff, rotationDampeningThreshold), -rotationDampeningThreshold)/rotationDampeningThreshold * rotationPower));
     }
 
     public void setTargetRotation(double target) {
         targetRotation = target;
         targetRotation = normalizeAngle(targetRotation);
+        applyTargetRotation();
     }
 
     public void setWorldMovementVector(VectorF vector) {
@@ -167,6 +179,12 @@ public class DriveTrain extends LinearOpMode {
         bottomLeftWheel = hardwareMap.get(DcMotor.class, "BottomLeftWheel");
 
         wheelMap = new DcMotor[]{topRightWheel, bottomRightWheel, topLeftWheel, bottomLeftWheel};
+
+        for (int i = 0; i < 4; i++) {
+            DcMotor motor = wheelMap[i];
+            motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        }
 
         topRightWheel.setDirection(DcMotor.Direction.FORWARD);
         bottomRightWheel.setDirection(DcMotor.Direction.FORWARD);
@@ -224,11 +242,13 @@ public class DriveTrain extends LinearOpMode {
                 if (gamepad1.right_bumper == true && lastRBumper == false) {
                     setTargetRotation(targetRotation - 90);
                 }
+                applyTargetRotation();
                 setMovementVectorRelativeToTargetOrientation(rawMoveVector);
                 applyMovement();
             } else { // free movement
                 setLocalMovementVector(rawMoveVector.multiplied((float) freeMoveSpeed));
-                setTargetRotation(targetRotation + freeTurnSpeed * deltaTime * -gamepad1.right_stick_x);
+                setTargetRotation(rotation); // it's immediately overriden but this is so that it snaps back to the nearest rotation after exiting free mode
+                setTurnVelocity(freeTurnSpeed * -gamepad1.right_stick_x);
                 applyMovement();
             }
 
