@@ -79,6 +79,8 @@ public class DriveTrain extends LinearOpMode {
     private double[] axialMovementMap = {-1, -1, -1, -1};
     private double[] lateralMovementMap = {-1, 1, 1, -1};
     private double[] turnMap = {1, 1, -1, -1};
+    private double freeMoveSpeed = 0.25;
+    private double freeTurnSpeed = 45;
 
     public OpenGLMatrix transformMatrix = OpenGLMatrix.identityMatrix();
     private VectorF movementVector = new VectorF(0, 0, 0, 1); // in the bot's local space
@@ -86,10 +88,12 @@ public class DriveTrain extends LinearOpMode {
     private OpenGLMatrix targetTransformMatrix = OpenGLMatrix.identityMatrix();
     private double rotation = 0;
     private double rotationDampeningThreshold = 45;
-    private double rotationPower = 0.6;
-    private double lastRotationTime = 0;
+    private double rotationPower = 1;
     private boolean lastLBumper = false;
     private boolean lastRBumper = false;
+
+    private double lastTick = 0;
+    private double deltaTime = 0;
 
     private double modulo(double a, double b) {
         return  (a % b + b) % b;
@@ -201,6 +205,8 @@ public class DriveTrain extends LinearOpMode {
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
 
+            deltaTime = runtime.seconds() - lastTick;
+            lastTick = runtime.seconds();
             targetRotation = normalizeAngle(targetRotation);
             Orientation currentOrientation = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES);
             rotation = currentOrientation.firstAngle;
@@ -209,17 +215,23 @@ public class DriveTrain extends LinearOpMode {
             Orientation targetOrientation = new Orientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES, (float) targetRotation, 0, 0, 0);
             targetTransformMatrix = targetOrientation.getRotationMatrix();
 
-            if (gamepad1.left_bumper == true && lastLBumper == false) {
-                setTargetRotation(targetRotation + 90);
-            }
-            if (gamepad1.right_bumper == true && lastRBumper == false) {
-                setTargetRotation(targetRotation - 90);
+            VectorF rawMoveVector = new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0, 1);
+            if (gamepad1.right_trigger < 0.5) { // grid movement
+                targetRotation = (double) (Math.round(targetRotation/90) * 90);
+                if (gamepad1.left_bumper == true && lastLBumper == false) {
+                    setTargetRotation(targetRotation + 90);
+                }
+                if (gamepad1.right_bumper == true && lastRBumper == false) {
+                    setTargetRotation(targetRotation - 90);
+                }
+                setMovementVectorRelativeToTargetOrientation(rawMoveVector);
+                applyMovement();
+            } else { // free movement
+                setLocalMovementVector(rawMoveVector.multiplied((float) freeMoveSpeed));
+                setTargetRotation(targetRotation + freeTurnSpeed * deltaTime * -gamepad1.right_stick_x);
+                applyMovement();
             }
 
-            setMovementVectorRelativeToTargetOrientation(new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0, 1));
-            applyMovement();
-
-            lastRotationTime = runtime.seconds();
             lastLBumper = gamepad1.left_bumper;
             lastRBumper = gamepad1.right_bumper;
             // Show the elapsed game time and wheel power.
