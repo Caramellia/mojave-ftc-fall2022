@@ -75,7 +75,7 @@ public class DriveTrain extends LinearOpMode {
     // distance sensor stuff
     private Rev2mDistanceSensor distanceSensorR = null;
     private Rev2mDistanceSensor distanceSensorL = null;
-    private double distanceBetweenSensors = 10; // inches
+    private double distanceBetweenSensors = 10 * 25.4; // inches to millimeters
     private final double WALL_CONSIDERATION_THRESHOLD = Math.toRadians(2.5); // radians duh
 
     // wheel stuff
@@ -84,6 +84,9 @@ public class DriveTrain extends LinearOpMode {
     private double[] axialMovementMap = {-1, -1, -1, -1}; // base wheel powers required for axial (i.e. forward/backward) movement
     private double[] lateralMovementMap = {-1, 1, 1, -1}; // base wheel powers required for lateral (i.e. side to side) movement
     private double[] turnMap = {1, 1, -1, -1}; // base wheel powers required for turning
+    private double encoderTicksPerRevolution = 537.7;
+    private double wheelDiameter = 100.0; // millimeters
+    private double wheelDistancePerEncoderTick = (100.0 * 2.0 * Math.PI)/encoderTicksPerRevolution;
 
     // movement stuff
     private VectorF movementVector = new VectorF(0, 0, 0, 1); // movement vector is in the bot's local space
@@ -92,22 +95,22 @@ public class DriveTrain extends LinearOpMode {
     private double masterPower = 0.9; // master multiplier of wheel powers
 
     // rotation stuff
-    private final double RIGHT_ANGLE = Math.PI/2;
+    private final double RIGHT_ANGLE = Math.PI/2.0;
     private BNO055IMU imu;
     private OpenGLMatrix rotationMatrix = OpenGLMatrix.identityMatrix();
     private OpenGLMatrix targetRotationMatrix = OpenGLMatrix.identityMatrix();
-    private double referenceRotation = 0; // frame of reference rotation, used to ensure that right-angle increments are aligned with the field
-    private double rotation = 0; // rotation of the bot as compared to the reference rotation
-    private double targetRotation = 0; // target for "rotation" variable, achieved by turning the bot
-    private double rotationDampeningThreshold = RIGHT_ANGLE/2; // threshold before the motors begin to lessen their power
-    private double rotationPower = 1; // multiplier for rotation speed
-    private double turnVelocity = 0; //
+    private double referenceRotation = 0.0; // frame of reference rotation, used to ensure that right-angle increments are aligned with the field
+    private double rotation = 0.0; // rotation of the bot as compared to the reference rotation
+    private double targetRotation = 0.0; // target for "rotation" variable, achieved by turning the bot
+    private double rotationDampeningThreshold = RIGHT_ANGLE/2.0; // threshold before the motors begin to lessen their power
+    private double rotationPower = 1.0; // multiplier for rotation speed
+    private double turnVelocity = 0.0; //
 
     private boolean lastLBumper = false;
     private boolean lastRBumper = false;
 
-    private double lastTick = 0;
-    private double deltaTime = 0;
+    private double lastTick = 0.0;
+    private double deltaTime = 0.0;
 
     // generic math functions
     private double modulo(double a, double b) {
@@ -205,8 +208,57 @@ public class DriveTrain extends LinearOpMode {
         return movementVector;
     }
 
+    // I stole this code from some random blog post and I'm going to edit it to make it work :)
+    /*
+    private VectorF getRealMovementDelta() {
+
+        //Compute change in encoder positions
+        delt_m0 = wheel0Pos - lastM0;
+        delt_m1 = wheel1Pos - lastM1;
+        delt_m2 = wheel2Pos - lastM2;
+        delt_m3 = wheel3Pos - lastM3;
+
+        //Compute displacements for each wheel
+        displ_m0 = delt_m0 * wheelDisplacePerEncoderCount;
+        displ_m1 = delt_m1 * wheelDisplacePerEncoderCount;
+        displ_m2 = delt_m2 * wheelDisplacePerEncoderCount;
+        displ_m3 = delt_m3 * wheelDisplacePerEncoderCount;
+
+        //Compute the average displacement in order to untangle rotation from displacement
+        displ_average = (displ_m0 + displ_m1 + displ_m2 + displ_m3) / 4.0;
+
+        //Compute the component of the wheel displacements that yield robot displacement
+        dev_m0 = displ_m0 - displ_average;
+        dev_m1 = displ_m1 - displ_average;
+        dev_m2 = displ_m2 - displ_average;
+        dev_m3 = displ_m3 - displ_average;
+
+        //Compute the displacement of the holonomic drive, in robot reference frame
+        delt_Xr = (dev_m0 + dev_m1 - dev_m2 - dev_m3) / twoSqrtTwo;
+        delt_Yr = (dev_m0 - dev_m1 - dev_m2 + dev_m3) / twoSqrtTwo;
+
+        //Move this holonomic displacement from robot to field frame of reference
+        robotTheta = IMU_ThetaRAD;
+        sinTheta = sin(robotTheta);
+        cosTheta = cos(robotTheta);
+        delt_Xf = delt_Xr * cosTheta - delt_Yr * sinTheta;
+        delt_Yf = delt_Yr * cosTheta + delt_Xr * sinTheta;
+
+        //Update the position
+        X = lastX + delt_Xf;
+        Y = lastY + delt_Yf;
+        Theta = robotTheta;
+        lastM0 = wheel0Pos;
+        lastM1 = wheel1Pos;
+        lastM2 = wheel2Pos;
+        lastM3 = wheel3Pos;
+    }
+    */
+
     @Override
     public void runOpMode() {
+
+        // Update control hub firmware to Firmware version 1.8.2
 
         // DISTANCE SENSOR SETUP
         {
@@ -301,8 +353,8 @@ public class DriveTrain extends LinearOpMode {
 
             // ODOMETRY HANDLING
             {
-                double distanceL = distanceSensorL.getDistance(DistanceUnit.INCH);
-                double distanceR = distanceSensorR.getDistance(DistanceUnit.INCH);
+                double distanceL = distanceSensorL.getDistance(DistanceUnit.MM);
+                double distanceR = distanceSensorR.getDistance(DistanceUnit.MM);
                 double angleAgainstWall = Math.atan((distanceL - distanceR) / distanceBetweenSensors); // clockwise turn == negative angle
                 telemetry.addData("Angle Against Wall", Math.toDegrees(angleAgainstWall));
 
