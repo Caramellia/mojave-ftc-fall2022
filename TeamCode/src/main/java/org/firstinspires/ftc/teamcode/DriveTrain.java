@@ -31,6 +31,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.bosch.BNO055IMU;
 import com.qualcomm.hardware.bosch.JustLoggingAccelerationIntegrator;
+import com.qualcomm.hardware.rev.Rev2mDistanceSensor;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -45,6 +46,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Acceleration;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.firstinspires.ftc.robotcore.external.navigation.Position;
 import org.firstinspires.ftc.robotcore.external.navigation.Velocity;
@@ -74,6 +76,16 @@ public class DriveTrain extends LinearOpMode {
     private DcMotor bottomLeftWheel = null;
     private BNO055IMU imu;
 
+    private final double RIGHT_ANGLE = Math.PI/2;
+
+    // distance sensor stuff
+
+    private Rev2mDistanceSensor distanceSensorR = null;
+    private Rev2mDistanceSensor distanceSensorL = null;
+    private double distanceBetweenSensors = 10; // inches
+    private final double WALL_CONSIDERATION_THRESHOLD = Math.toRadians(2.5); // radians duh
+
+    // wheel stuff
     private DcMotor[] wheelMap;
     private double[] wheelPowers = {0, 0, 0, 0};
     private double[] axialMovementMap = {-1, -1, -1, -1};
@@ -89,6 +101,7 @@ public class DriveTrain extends LinearOpMode {
 
     private double targetRotation = 0;
     private OpenGLMatrix targetTransformMatrix = OpenGLMatrix.identityMatrix();
+    private double referenceRotation = 0;
     private double rotation = 0;
     private double rotationDampeningThreshold = 45;
     private double rotationPower = 1;
@@ -98,16 +111,33 @@ public class DriveTrain extends LinearOpMode {
     private double lastTick = 0;
     private double deltaTime = 0;
 
+    // generic math functions
     private double modulo(double a, double b) {
         return  (a % b + b) % b;
     }
 
-    private double normalizeAngle(double angle) {
-        return modulo((angle + 180), 360) - 180;
+    private double normalizeAngle(double angle, AngleUnit angleUnit) {
+        if (angleUnit == AngleUnit.DEGREES) {
+            return modulo((angle + 180), 360) - 180;
+        } else {
+            return modulo((angle + Math.PI), 2 * Math.PI) - Math.PI;
+        }
     }
 
-    private double Lerp(double a, double b, double alpha) {
+    private double lerp(double a, double b, double alpha) {
         return a + (b - a) * alpha;
+    }
+
+    private double roundToNearest(double num, double interval) {
+        return (Math.round(num/interval) * interval);
+    }
+
+    // stuff that doesn't actually affect the hardware
+    public void updateTransformationData() {
+        Orientation rawOrientation = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.RADIANS);
+        rotation = normalizeAngle(rawOrientation.firstAngle - referenceRotation, AngleUnit.RADIANS);
+        Orientation currentOrientation = new Orientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.RADIANS, (float) rotation, 0, 0, 0);
+        transformMatrix = currentOrientation.getRotationMatrix();
     }
 
     // yeah bro
@@ -118,7 +148,7 @@ public class DriveTrain extends LinearOpMode {
         float lateralMovement = movementVector.get(0);
         double maxPowerMagnitude = 1;
         for (int i = 0; i < 4; i++) {
-            wheelPowers[i] = (double) (axialMovementMap[i] * axialMovement + lateralMovementMap[i] * lateralMovement + turnMap[i] * turnVelocity);
+            wheelPowers[i] = (axialMovementMap[i] * axialMovement + lateralMovementMap[i] * lateralMovement + turnMap[i] * turnVelocity);
             maxPowerMagnitude = Math.max(maxPowerMagnitude, wheelPowers[i]);
         }
         for (int i = 0; i < 4; i++) {
@@ -133,14 +163,16 @@ public class DriveTrain extends LinearOpMode {
     }
 
     public void applyTargetRotation() {
-        float turnDiff = (float) normalizeAngle(targetRotation - rotation);
+        float turnDiff = (float) normalizeAngle(targetRotation - rotation, AngleUnit.RADIANS);
         telemetry.addData("turn diff", turnDiff);
         setTurnVelocity((float) (Math.max(Math.min(turnDiff, rotationDampeningThreshold), -rotationDampeningThreshold)/rotationDampeningThreshold * rotationPower));
     }
 
     public void setTargetRotation(double target) {
         targetRotation = target;
-        targetRotation = normalizeAngle(targetRotation);
+        targetRotation = normalizeAngle(targetRotation, AngleUnit.RADIANS);
+        Orientation targetOrientation = new Orientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.RADIANS, (float) targetRotation, 0, 0, 0);
+        targetTransformMatrix = targetOrientation.getRotationMatrix();
         applyTargetRotation();
     }
 
@@ -167,8 +199,21 @@ public class DriveTrain extends LinearOpMode {
         return movementVector;
     }
 
+    public void setReferenceRotation(double val) {
+        targetRotation = targetRotation - referenceRotation;
+        referenceRotation = val;
+        setTargetRotation(referenceRotation + targetRotation);
+        updateTransformationData();
+    }
+
     @Override
     public void runOpMode() {
+
+        ///////////////////////
+        // DISTANCE SENSOR SETUP
+
+        distanceSensorR = hardwareMap.get(Rev2mDistanceSensor.class, "DistanceR");
+        distanceSensorL = hardwareMap.get(Rev2mDistanceSensor.class, "DistanceL");
 
         ///////////////////////
         // WHEEL SETUP BEGIN //
@@ -198,11 +243,12 @@ public class DriveTrain extends LinearOpMode {
         // IMU SETUP BEGIN //
         /////////////////////
         BNO055IMU.Parameters parameters = new BNO055IMU.Parameters();
-        parameters.angleUnit           = BNO055IMU.AngleUnit.DEGREES;
+        parameters.angleUnit           = BNO055IMU.AngleUnit.RADIANS;
         parameters.accelUnit           = BNO055IMU.AccelUnit.METERS_PERSEC_PERSEC;
         parameters.calibrationDataFile = "BNO055IMUCalibration.json"; // see the calibration sample opmode
         parameters.loggingEnabled      = true;
         parameters.loggingTag          = "IMU";
+        parameters.mode = BNO055IMU.SensorMode.NDOF;
         // parameters.accelerationIntegrationAlgorithm = new JustLoggingAccelerationIntegrator();
 
         imu = hardwareMap.get(BNO055IMU.class, "imu");
@@ -212,7 +258,11 @@ public class DriveTrain extends LinearOpMode {
         ///////////////////
 
         // Wait for the game to start (driver presses PLAY)
-        telemetry.addData("Status", "Initialized");
+        telemetry.addData("Status", "Initialized.");
+        telemetry.addData("Gyroscope Status", imu.isGyroCalibrated() ? "Calibrated." : "Not calibrated.");
+        telemetry.addData("Magnetometer Status", imu.isMagnetometerCalibrated() ? "Calibrated." : "Not calibrated.");
+        telemetry.addData("Accelerometer Status", imu.isAccelerometerCalibrated() ? "Calibrated." : "Not calibrated.");
+        telemetry.addData("Game", "Press START to run >>");
         telemetry.update();
 
         waitForStart();
@@ -225,40 +275,58 @@ public class DriveTrain extends LinearOpMode {
 
             deltaTime = runtime.seconds() - lastTick;
             lastTick = runtime.seconds();
-            targetRotation = normalizeAngle(targetRotation);
-            Orientation currentOrientation = imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES);
-            rotation = currentOrientation.firstAngle;
 
-            transformMatrix = currentOrientation.getRotationMatrix();
-            Orientation targetOrientation = new Orientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES, (float) targetRotation, 0, 0, 0);
-            targetTransformMatrix = targetOrientation.getRotationMatrix();
 
+            // ROTATION CALCULATIONS
+            updateTransformationData();
+            setTargetRotation(normalizeAngle(targetRotation, AngleUnit.RADIANS)); // normalize the target rotation
+
+            // MOVEMENT HANDLING
             VectorF rawMoveVector = new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0, 1);
             if (gamepad1.right_trigger < 0.5) { // grid movement
-                targetRotation = (double) (Math.round(targetRotation/90) * 90);
-                if (gamepad1.left_bumper == true && lastLBumper == false) {
-                    setTargetRotation(targetRotation + 90);
+                setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
+                // turning
+                if (gamepad1.left_bumper && !lastLBumper) {
+                    setTargetRotation(targetRotation + RIGHT_ANGLE);
                 }
-                if (gamepad1.right_bumper == true && lastRBumper == false) {
-                    setTargetRotation(targetRotation - 90);
+                if (gamepad1.right_bumper && !lastRBumper) {
+                    setTargetRotation(targetRotation - RIGHT_ANGLE);
                 }
+                // application
                 applyTargetRotation();
                 setMovementVectorRelativeToTargetOrientation(rawMoveVector);
-                applyMovement();
             } else { // free movement
+                // just a bunch of application this is ez
                 setLocalMovementVector(rawMoveVector.multiplied((float) freeMoveSpeed));
-                setTargetRotation(rotation); // it's immediately overriden but this is so that it snaps back to the nearest rotation after exiting free mode
+                setTargetRotation(rotation); // it's immediately overridden but this is so that it snaps back to the nearest rotation after exiting free mode
                 setTurnVelocity(freeTurnSpeed * -gamepad1.right_stick_x);
-                applyMovement();
+            }
+
+            // ODOMETRY HANDLING
+
+            double distanceL = distanceSensorL.getDistance(DistanceUnit.INCH);
+            double distanceR = distanceSensorR.getDistance(DistanceUnit.INCH);
+            double angleAgainstWall = Math.atan((distanceL - distanceR)/distanceBetweenSensors); // clockwise turn == negative angle
+
+            if (distanceL < Rev2mDistanceSensor.distanceOutOfRange && distanceR < Rev2mDistanceSensor.distanceOutOfRange) {
+                // TEST IF THE "ROTATION" VALUE INCREASES OR DECREASES WITH CLOCKWISE TURNS!!!
+                double angleOfWall = rotation - angleAgainstWall;
+                telemetry.addData("Angle of Wall", Math.toDegrees(angleOfWall));
+                if (gamepad1.a) { // set this wall as the new frame of reference
+                    setReferenceRotation(angleOfWall);
+                    setTargetRotation(0);
+                }
+                boolean isWall = Math.abs(angleOfWall - roundToNearest(angleOfWall, RIGHT_ANGLE)) < WALL_CONSIDERATION_THRESHOLD;
+                telemetry.addData("Wall?", isWall ? "Yay" : "Nay");
             }
 
             lastLBumper = gamepad1.left_bumper;
             lastRBumper = gamepad1.right_bumper;
-            // Show the elapsed game time and wheel power.
             telemetry.addData("Status", "Run Time: " + runtime.toString());
             telemetry.addData("Local Movement Vector", movementVector);
-            telemetry.addData("Orientation", currentOrientation.toString());
-            telemetry.addData("Target Rotation", targetRotation);
+            telemetry.addData("Rotation", Math.toDegrees(rotation));
+            telemetry.addData("Target Rotation", Math.toDegrees(targetRotation));
+            telemetry.addData("Angle Against Wall", Math.toDegrees(angleAgainstWall));
             telemetry.update();
         }
     }}
