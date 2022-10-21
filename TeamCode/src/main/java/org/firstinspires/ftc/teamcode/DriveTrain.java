@@ -84,10 +84,10 @@ public class DriveTrain extends LinearOpMode {
 
     // arm stuff
     private DcMotor armMotor;
-    private double armMinEncoderValue = 0;
-    private double armMaxEncoderValue = encoderTicksPerRevolution * 2; // for now, change it once we get a concrete value
+    private double armMinEncoderValue = -3271;
+    private double armMaxEncoderValue = 0; // for now, change it once we get a concrete value
     private double goalArmEncoderValue = 0;
-    private double armMotorSpeed = encoderTicksPerRevolution; // desired encoder ticks per second
+    private double armMotorSpeed = -3000; // desired encoder ticks per second
 
     // wheel stuff
     private DcMotor[] wheelMap; // list of the wheel DcMotors
@@ -318,6 +318,7 @@ public class DriveTrain extends LinearOpMode {
             armMotor = hardwareMap.get(DcMotor.class, "ArmMotor");
             armMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             telemetry.addData("Arm Status", "Reset arm motor encoder.");
+            armMotor.setTargetPosition((int) goalArmEncoderValue);
             armMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
             armMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
@@ -418,6 +419,10 @@ public class DriveTrain extends LinearOpMode {
                 double armDir = gamepad1.right_trigger - gamepad1.left_trigger;
                 goalArmEncoderValue = Math.max(Math.min(goalArmEncoderValue + armDir * armMotorSpeed * deltaTime, armMaxEncoderValue), armMinEncoderValue);
                 armMotor.setTargetPosition((int) goalArmEncoderValue);
+                armMotor.setPower(Math.abs(armDir) > 0.05 ? 1 : 0);
+                telemetry.addData("Arm Goal Encoder", goalArmEncoderValue);
+                telemetry.addData("Arm Actual Encoder", armMotor.getCurrentPosition());
+                telemetry.addData("Arm Motor Goal Encoder", armMotor.getTargetPosition());
             }
 
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
@@ -430,9 +435,10 @@ public class DriveTrain extends LinearOpMode {
                 try {
                     lastGamepadState.copy(gamepad1);
                 } catch (RobotCoreException e) {
-                    e.printStackTrace();
                     telemetry.addData("Status", "uh oh something went horribly wrong with the gmamepad!");
                 }
+                telemetry.addData("Current Gampead", gamepad1.toString());
+                telemetry.addData("Last Gampead", lastGamepadState.toString());
                 telemetry.update();
             }
         }
