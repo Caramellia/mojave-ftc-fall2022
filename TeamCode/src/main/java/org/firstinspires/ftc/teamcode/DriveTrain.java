@@ -102,8 +102,8 @@ public class DriveTrain extends LinearOpMode {
     private double referenceRotation = 0.0; // frame of reference rotation, used to ensure that right-angle increments are aligned with the field
     private double rotation = 0.0; // rotation of the bot as compared to the reference rotation
     private double targetRotation = 0.0; // target for "rotation" variable, achieved by turning the bot
-    private double rotationDampeningThreshold = RIGHT_ANGLE/2.0; // threshold before the motors begin to lessen their power
-    private double rotationPower = 1.0; // multiplier for rotation speed
+    private double rotationDampeningThreshold = RIGHT_ANGLE * (60.0/90.0); // threshold before the motors begin to lessen their power
+    private double rotationPower = 0.9; // multiplier for rotation speed
     private double turnVelocity = 0.0; //
 
     private boolean lastLBumper = false;
@@ -171,16 +171,18 @@ public class DriveTrain extends LinearOpMode {
     private void setReferenceRotation(double val) {
         targetRotation = targetRotation - referenceRotation;
         referenceRotation = val;
-        setTargetRotation(referenceRotation + targetRotation);
+        setTargetRotation(referenceRotation + targetRotation, false);
         updateRotationData();
     }
 
-    private void setTargetRotation(double target) {
+    private void setTargetRotation(double target, boolean apply) {
         targetRotation = target;
         targetRotation = normalizeAngle(targetRotation, AngleUnit.RADIANS);
         Orientation targetOrientation = new Orientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.RADIANS, (float) targetRotation, 0, 0, 0);
         targetRotationMatrix = targetOrientation.getRotationMatrix();
-        applyTargetRotation();
+        if (apply) {
+            applyTargetRotation();
+        }
     }
     
 
@@ -325,20 +327,20 @@ public class DriveTrain extends LinearOpMode {
             // ROTATION CALCULATIONS
             {
                 updateRotationData();
-                setTargetRotation(normalizeAngle(targetRotation, AngleUnit.RADIANS)); // normalize the target rotation
+                setTargetRotation(normalizeAngle(targetRotation, AngleUnit.RADIANS), false); // normalize the target rotation
             }
 
             // MOVEMENT HANDLING
             {
                 VectorF rawMoveVector = new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0, 1);
                 if (gamepad1.right_trigger < 0.5) { // grid movement
-                    setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
+                    setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), true); // snap target rotation to 90 degree angles
                     // turning
                     if (gamepad1.left_bumper && !lastLBumper) {
-                        setTargetRotation(targetRotation + RIGHT_ANGLE);
+                        setTargetRotation(targetRotation + RIGHT_ANGLE, true);
                     }
                     if (gamepad1.right_bumper && !lastRBumper) {
-                        setTargetRotation(targetRotation - RIGHT_ANGLE);
+                        setTargetRotation(targetRotation - RIGHT_ANGLE, true);
                     }
                     // application
                     applyTargetRotation();
@@ -346,7 +348,7 @@ public class DriveTrain extends LinearOpMode {
                 } else { // free movement
                     // just a bunch of application this is ez
                     setLocalMovementVector(rawMoveVector.multiplied((float) freeMoveSpeed));
-                    setTargetRotation(rotation); // it's immediately overridden but this is so that it snaps back to the nearest rotation after exiting free mode
+                    setTargetRotation(rotation, false); // it's immediately overridden but this is so that it snaps back to the nearest rotation after exiting free mode
                     setTurnVelocity(freeTurnSpeed * -gamepad1.right_stick_x);
                 }
             }
@@ -355,16 +357,18 @@ public class DriveTrain extends LinearOpMode {
             {
                 double distanceL = distanceSensorL.getDistance(DistanceUnit.MM);
                 double distanceR = distanceSensorR.getDistance(DistanceUnit.MM);
+                telemetry.addData("Distance L", distanceL);
+                telemetry.addData("Distance R", distanceR);
                 double angleAgainstWall = Math.atan((distanceL - distanceR) / distanceBetweenSensors); // clockwise turn == negative angle
                 telemetry.addData("Angle Against Wall", Math.toDegrees(angleAgainstWall));
 
-                if (distanceL < Rev2mDistanceSensor.distanceOutOfRange && distanceR < Rev2mDistanceSensor.distanceOutOfRange) {
+                if (distanceL != Rev2mDistanceSensor.distanceOutOfRange && distanceR != Rev2mDistanceSensor.distanceOutOfRange) {
                     // TEST IF THE "ROTATION" VALUE INCREASES OR DECREASES WITH CLOCKWISE TURNS!!!
                     double angleOfWall = rotation - angleAgainstWall;
                     telemetry.addData("Angle of Wall", Math.toDegrees(angleOfWall));
                     if (gamepad1.a) { // set this wall as the new frame of reference
                         setReferenceRotation(angleOfWall);
-                        setTargetRotation(0);
+                        setTargetRotation(0, true);
                     }
                     boolean isWall = Math.abs(angleOfWall - roundToNearest(angleOfWall, RIGHT_ANGLE)) < WALL_CONSIDERATION_THRESHOLD;
                     telemetry.addData("Wall?", isWall ? "Yay" : "Nay");
