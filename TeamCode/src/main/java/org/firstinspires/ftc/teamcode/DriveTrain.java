@@ -35,8 +35,11 @@ import com.qualcomm.hardware.rev.Rev2mDistanceSensor;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.exception.RobotCoreException;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.util.ReadWriteFile;
 
 // linear algebra libraries
 import org.firstinspires.ftc.robotcore.external.matrices.OpenGLMatrix;
@@ -50,6 +53,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.firstinspires.ftc.robotcore.external.navigation.Position;
 import org.firstinspires.ftc.robotcore.external.navigation.Velocity;
+import org.firstinspires.ftc.robotcore.internal.system.AppUtil;
 
 import java.io.*;
 import java.util.*;
@@ -69,26 +73,33 @@ import java.util.*;
 public class DriveTrain extends LinearOpMode {
 
     private ElapsedTime runtime = new ElapsedTime();
-
-
+    private Gamepad lastGamepadState = new Gamepad();
+    private double encoderTicksPerRevolution = 537.7;
 
     // distance sensor stuff
     private Rev2mDistanceSensor distanceSensorR = null;
     private Rev2mDistanceSensor distanceSensorL = null;
     private double distanceBetweenSensors = 10 * 25.4; // inches to millimeters
-    private final double WALL_CONSIDERATION_THRESHOLD = Math.toRadians(2.5); // radians duh
+    private double WALL_CONSIDERATION_THRESHOLD = Math.toRadians(2.5); // radians duh
+
+    // arm stuff
+    private DcMotor armMotor;
+    private double armMinEncoderValue = 0;
+    private double armMaxEncoderValue = encoderTicksPerRevolution * 2; // for now, change it once we get a concrete value
+    private double goalArmEncoderValue = 0;
+    private double armMotorSpeed = encoderTicksPerRevolution; // desired encoder ticks per second
 
     // wheel stuff
     private DcMotor[] wheelMap; // list of the wheel DcMotors
     private double[] wheelPowers = {0, 0, 0, 0}; // the final powers that are applied to the wheels
-    private double[] axialMovementMap = {-1, -1, -1, -1}; // base wheel powers required for axial (i.e. forward/backward) movement
-    private double[] lateralMovementMap = {-1, 1, 1, -1}; // base wheel powers required for lateral (i.e. side to side) movement
-    private double[] turnMap = {1, 1, -1, -1}; // base wheel powers required for turning
-    private double encoderTicksPerRevolution = 537.7;
+    private double[] axialMovementMap = {1, 1, 1, 1}; // base wheel powers required for axial (i.e. forward/backward) movement
+    private double[] lateralMovementMap = {1, -1, -1, 1}; // base wheel powers required for lateral (i.e. side to side) movement
+    private double[] turnMap = {-1, -1, 1, 1}; // base wheel powers required for turning
     private double wheelDiameter = 100.0; // millimeters
     private double wheelDistancePerEncoderTick = (100.0 * 2.0 * Math.PI)/encoderTicksPerRevolution;
 
     // movement stuff
+    private boolean freeMovement = false;
     private VectorF movementVector = new VectorF(0, 0, 0, 1); // movement vector is in the bot's local space
     private double freeMoveSpeed = 0.25; // multiplier for strafing speeds in "free movement" mode
     private double freeTurnSpeed = 0.25; // multiplier for turning speeds in "free movement" mode
@@ -105,9 +116,6 @@ public class DriveTrain extends LinearOpMode {
     private double rotationDampeningThreshold = RIGHT_ANGLE * (60.0/90.0); // threshold before the motors begin to lessen their power
     private double rotationPower = 0.9; // multiplier for rotation speed
     private double turnVelocity = 0.0; //
-
-    private boolean lastLBumper = false;
-    private boolean lastRBumper = false;
 
     private double lastTick = 0.0;
     private double deltaTime = 0.0;
@@ -283,15 +291,15 @@ public class DriveTrain extends LinearOpMode {
                 motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
             }
 
-            wheelMap[0].setDirection(DcMotor.Direction.FORWARD);
-            wheelMap[1].setDirection(DcMotor.Direction.FORWARD);
-            wheelMap[2].setDirection(DcMotor.Direction.REVERSE);
-            wheelMap[3].setDirection(DcMotor.Direction.REVERSE);
+            wheelMap[0].setDirection(DcMotor.Direction.REVERSE);
+            wheelMap[1].setDirection(DcMotor.Direction.REVERSE);
+            wheelMap[2].setDirection(DcMotor.Direction.FORWARD);
+            wheelMap[3].setDirection(DcMotor.Direction.FORWARD);
         }
 
         // IMU SETUP
-        imu = hardwareMap.get(BNO055IMU.class, "imu");
         {
+            imu = hardwareMap.get(BNO055IMU.class, "imu");
             BNO055IMU.Parameters parameters = new BNO055IMU.Parameters();
             parameters.angleUnit = BNO055IMU.AngleUnit.RADIANS;
             parameters.accelUnit = BNO055IMU.AccelUnit.METERS_PERSEC_PERSEC;
@@ -304,20 +312,44 @@ public class DriveTrain extends LinearOpMode {
             imu.initialize(parameters);
         }
 
+        // ARM SETUP
+
+        {
+            armMotor = hardwareMap.get(DcMotor.class, "ArmMotor");
+            armMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            telemetry.addData("Arm Status", "Reset arm motor encoder.");
+            armMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            armMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        }
+
         // INITIALIZATION TELEMETRY
         {
-            telemetry.addData("Status", "Initialized.");
             telemetry.addData("Gyroscope Status", imu.isGyroCalibrated() ? "Calibrated." : "Not calibrated.");
             telemetry.addData("Magnetometer Status", imu.isMagnetometerCalibrated() ? "Calibrated." : "Not calibrated.");
             telemetry.addData("Accelerometer Status", imu.isAccelerometerCalibrated() ? "Calibrated." : "Not calibrated.");
+            telemetry.addData("Status", "Initialized.");
+
+            // load configuration
+            try {
+                File file = AppUtil.getInstance().getSettingsFile("DriveTrainConfig.json");
+                String serializedConfig = ReadWriteFile.readFileOrThrow(file);
+                telemetry.addData("Got config:", serializedConfig);
+            } catch (IOException error) {
+                telemetry.addData("Error while loading config: ", error.getMessage());
+            }
+
             telemetry.addData("Game", "Press START to run >>");
             telemetry.update();
         }
 
+
+
         waitForStart();
         runtime.reset();
 
-        imu.startAccelerationIntegration(new Position(), new Velocity(), 1000);
+
+
+        //imu.startAccelerationIntegration(new Position(), new Velocity(), 1000);
 
         // MAIN LOOP
         while (opModeIsActive()) {
@@ -333,14 +365,18 @@ public class DriveTrain extends LinearOpMode {
             // MOVEMENT HANDLING
             {
                 VectorF rawMoveVector = new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0, 1);
-                if (gamepad1.right_trigger < 0.5) { // grid movement
-                    setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), true); // snap target rotation to 90 degree angles
+                if (gamepad1.a && !lastGamepadState.a) { // alternate movement style
+                    freeMovement = !freeMovement;
+                }
+                if (!freeMovement) {
                     // turning
-                    if (gamepad1.left_bumper && !lastLBumper) {
+                    if (gamepad1.left_bumper && !lastGamepadState.left_bumper) {
+                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), false); // snap target rotation to 90 degree angles
                         setTargetRotation(targetRotation + RIGHT_ANGLE, true);
                     }
-                    if (gamepad1.right_bumper && !lastRBumper) {
-                        setTargetRotation(targetRotation - RIGHT_ANGLE, true);
+                    if (gamepad1.right_bumper && !lastGamepadState.right_bumper) {
+                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), false); // snap target rotation to 90 degree angles
+                        setTargetRotation(targetRotation - RIGHT_ANGLE, false);
                     }
                     // application
                     applyTargetRotation();
@@ -366,7 +402,7 @@ public class DriveTrain extends LinearOpMode {
                     // TEST IF THE "ROTATION" VALUE INCREASES OR DECREASES WITH CLOCKWISE TURNS!!!
                     double angleOfWall = rotation - angleAgainstWall;
                     telemetry.addData("Angle of Wall", Math.toDegrees(angleOfWall));
-                    if (gamepad1.a) { // set this wall as the new frame of reference
+                    if (gamepad1.y && !lastGamepadState.y) { // set this wall as the new frame of reference
                         setReferenceRotation(angleOfWall);
                         setTargetRotation(0, true);
                     }
@@ -377,15 +413,26 @@ public class DriveTrain extends LinearOpMode {
                 }
             }
 
+            // ARM HANDLING
+            {
+                double armDir = gamepad1.right_trigger - gamepad1.left_trigger;
+                goalArmEncoderValue = Math.max(Math.min(goalArmEncoderValue + armDir * armMotorSpeed * deltaTime, armMaxEncoderValue), armMinEncoderValue);
+                armMotor.setTargetPosition((int) goalArmEncoderValue);
+            }
+
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {
-                lastLBumper = gamepad1.left_bumper;
-                lastRBumper = gamepad1.right_bumper;
                 lastTick = runtime.seconds();
                 telemetry.addData("Run Time", runtime.toString());
                 telemetry.addData("Local Movement Vector", movementVector);
                 telemetry.addData("Rotation", Math.toDegrees(rotation));
                 telemetry.addData("Target Rotation", Math.toDegrees(targetRotation));
+                try {
+                    lastGamepadState.copy(gamepad1);
+                } catch (RobotCoreException e) {
+                    e.printStackTrace();
+                    telemetry.addData("Status", "uh oh something went horribly wrong with the gmamepad!");
+                }
                 telemetry.update();
             }
         }
