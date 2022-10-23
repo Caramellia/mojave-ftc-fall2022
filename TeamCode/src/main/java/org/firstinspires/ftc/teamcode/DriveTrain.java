@@ -38,6 +38,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.exception.RobotCoreException;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.ReadWriteFile;
 
@@ -90,6 +91,13 @@ public class DriveTrain extends LinearOpMode {
     private double goalArmEncoderValue = 0;
     private double armMotorSpeed = -3000; // desired encoder ticks per second
 
+    // claw stuff
+    private Servo clawServoL;
+    private Servo clawServoR;
+    private double offClawPosition;
+    private double squeezeClawPosition;
+    private double clawPosition;
+
     // wheel stuff
     private DcMotor[] wheelMap; // list of the wheel DcMotors
     private double[] wheelPowers = {0, 0, 0, 0}; // the final powers that are applied to the wheels
@@ -97,7 +105,7 @@ public class DriveTrain extends LinearOpMode {
     private double[] lateralMovementMap = {1, -1, -1, 1}; // base wheel powers required for lateral (i.e. side to side) movement
     private double[] turnMap = {-1, -1, 1, 1}; // base wheel powers required for turning
     private double wheelDiameter = 100.0; // millimeters
-    private double wheelDistancePerEncoderTick = (100.0 * 2.0 * Math.PI)/encoderTicksPerRevolution;
+    private double wheelDistancePerEncoderTick = (100.0 * Math.PI)/encoderTicksPerRevolution;
 
     // movement stuff
     private boolean freeMovement = false;
@@ -105,6 +113,8 @@ public class DriveTrain extends LinearOpMode {
     private double freeMoveSpeed = 0.25; // multiplier for strafing speeds in "free movement" mode
     private double freeTurnSpeed = 0.25; // multiplier for turning speeds in "free movement" mode
     private double masterPower = 0.9; // master multiplier of wheel powers
+    private int[] lastWheelEncoders = {0, 0, 0, 0};
+    private int[] currentWheelEncoders = {0, 0, 0, 0};
 
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
@@ -262,6 +272,10 @@ public class DriveTrain extends LinearOpMode {
     }
     */
 
+    private VectorF getRealMovementDelta() {
+
+    }
+
     @Override
     public void runOpMode() {
 
@@ -320,6 +334,12 @@ public class DriveTrain extends LinearOpMode {
             armMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
 
+        // CLAW SETUP
+        {
+            clawServoL = hardwareMap.get(Servo.class, "ClawL");
+            clawServoR = hardwareMap.get(Servo.class, "ClawR");
+        }
+
         // INITIALIZATION TELEMETRY
         {
             telemetry.addData("Gyroscope Status", imu.isGyroCalibrated() ? "Calibrated." : "Not calibrated.");
@@ -345,14 +365,13 @@ public class DriveTrain extends LinearOpMode {
         waitForStart();
         runtime.reset();
 
-
-
         //imu.startAccelerationIntegration(new Position(), new Velocity(), 1000);
 
         // MAIN LOOP
         while (opModeIsActive()) {
 
             deltaTime = runtime.seconds() - lastTick;
+            lastTick = runtime.seconds();
 
             // ROTATION CALCULATIONS
             {
@@ -424,7 +443,6 @@ public class DriveTrain extends LinearOpMode {
 
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {
-                lastTick = runtime.seconds();
                 applyTargetRotation();
                 applyMovement();
                 telemetry.addData("Run Time", runtime.toString());
