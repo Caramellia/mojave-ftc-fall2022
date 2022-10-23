@@ -437,7 +437,7 @@ public class DriveTrain extends LinearOpMode {
                     lastGamepadState.copy(currentGamepadState);
                     currentGamepadState.copy(gamepad1);
                 } catch (RobotCoreException e) {
-                    telemetry.addData("Status", "uh oh something went horribly wrong with the gmamepad!");
+                    telemetry.addData("Status", "uh oh something went horribly wrong with the gamepad!");
                 }
                 telemetry.addData("Current Gampead", currentGamepadState.toString());
                 telemetry.addData("Last Gampead", lastGamepadState.toString());
