@@ -168,7 +168,6 @@ public class DriveTrain extends LinearOpMode {
 
     private void setTurnVelocity(double vel) {
         turnVelocity = vel;
-        applyMovement();
     }
 
     private void applyTargetRotation() {
@@ -180,18 +179,15 @@ public class DriveTrain extends LinearOpMode {
     private void setReferenceRotation(double val) {
         targetRotation = targetRotation - referenceRotation;
         referenceRotation = val;
-        setTargetRotation(referenceRotation + targetRotation, false);
+        setTargetRotation(referenceRotation + targetRotation);
         updateRotationData();
     }
 
-    private void setTargetRotation(double target, boolean apply) {
+    private void setTargetRotation(double target) {
         targetRotation = target;
         targetRotation = normalizeAngle(targetRotation, AngleUnit.RADIANS);
         Orientation targetOrientation = new Orientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.RADIANS, (float) targetRotation, 0, 0, 0);
         targetRotationMatrix = targetOrientation.getRotationMatrix();
-        if (apply) {
-            applyTargetRotation();
-        }
     }
     
 
@@ -361,7 +357,7 @@ public class DriveTrain extends LinearOpMode {
             // ROTATION CALCULATIONS
             {
                 updateRotationData();
-                setTargetRotation(normalizeAngle(targetRotation, AngleUnit.RADIANS), false); // normalize the target rotation
+                setTargetRotation(normalizeAngle(targetRotation, AngleUnit.RADIANS)); // normalize the target rotation
             }
 
             // MOVEMENT HANDLING
@@ -373,12 +369,12 @@ public class DriveTrain extends LinearOpMode {
                 if (!freeMovement) {
                     // turning
                     if (currentGamepadState.left_bumper && !lastGamepadState.left_bumper) {
-                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), false); // snap target rotation to 90 degree angles
-                        setTargetRotation(targetRotation + RIGHT_ANGLE, true);
+                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
+                        setTargetRotation(targetRotation + RIGHT_ANGLE);
                     }
                     if (currentGamepadState.right_bumper && !lastGamepadState.right_bumper) {
-                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), false); // snap target rotation to 90 degree angles
-                        setTargetRotation(targetRotation - RIGHT_ANGLE, false);
+                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
+                        setTargetRotation(targetRotation - RIGHT_ANGLE);
                     }
                     // application
                     applyTargetRotation();
@@ -386,7 +382,7 @@ public class DriveTrain extends LinearOpMode {
                 } else { // free movement
                     // just a bunch of application this is ez
                     setLocalMovementVector(rawMoveVector.multiplied((float) freeMoveSpeed));
-                    setTargetRotation(rotation, false); // it's immediately overridden but this is so that it snaps back to the nearest rotation after exiting free mode
+                    setTargetRotation(rotation);
                     setTurnVelocity(freeTurnSpeed * -currentGamepadState.right_stick_x);
                 }
             }
@@ -406,7 +402,7 @@ public class DriveTrain extends LinearOpMode {
                     telemetry.addData("Angle of Wall", Math.toDegrees(angleOfWall));
                     if (currentGamepadState.y && !lastGamepadState.y) { // set this wall as the new frame of reference
                         setReferenceRotation(angleOfWall);
-                        setTargetRotation(0, true);
+                        setTargetRotation(0);
                     }
                     boolean isWall = Math.abs(angleOfWall - roundToNearest(angleOfWall, RIGHT_ANGLE)) < WALL_CONSIDERATION_THRESHOLD;
                     telemetry.addData("Wall?", isWall ? "Yay" : "Nay");
@@ -429,6 +425,8 @@ public class DriveTrain extends LinearOpMode {
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {
                 lastTick = runtime.seconds();
+                applyTargetRotation();
+                applyMovement();
                 telemetry.addData("Run Time", runtime.toString());
                 telemetry.addData("Local Movement Vector", movementVector);
                 telemetry.addData("Rotation", Math.toDegrees(rotation));
