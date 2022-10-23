@@ -74,6 +74,7 @@ public class DriveTrain extends LinearOpMode {
 
     private ElapsedTime runtime = new ElapsedTime();
     private Gamepad lastGamepadState = new Gamepad();
+    private Gamepad currentGamepadState = new Gamepad();
     private double encoderTicksPerRevolution = 537.7;
 
     // distance sensor stuff
@@ -365,17 +366,17 @@ public class DriveTrain extends LinearOpMode {
 
             // MOVEMENT HANDLING
             {
-                VectorF rawMoveVector = new VectorF(gamepad1.left_stick_x, gamepad1.left_stick_y, 0, 1);
-                if (gamepad1.a && !lastGamepadState.a) { // alternate movement style
+                VectorF rawMoveVector = new VectorF(currentGamepadState.left_stick_x, currentGamepadState.left_stick_y, 0, 1);
+                if (currentGamepadState.a && !lastGamepadState.a) { // alternate movement style
                     freeMovement = !freeMovement;
                 }
                 if (!freeMovement) {
                     // turning
-                    if (gamepad1.left_bumper && !lastGamepadState.left_bumper) {
+                    if (currentGamepadState.left_bumper && !lastGamepadState.left_bumper) {
                         setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), false); // snap target rotation to 90 degree angles
                         setTargetRotation(targetRotation + RIGHT_ANGLE, true);
                     }
-                    if (gamepad1.right_bumper && !lastGamepadState.right_bumper) {
+                    if (currentGamepadState.right_bumper && !lastGamepadState.right_bumper) {
                         setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE), false); // snap target rotation to 90 degree angles
                         setTargetRotation(targetRotation - RIGHT_ANGLE, false);
                     }
@@ -386,7 +387,7 @@ public class DriveTrain extends LinearOpMode {
                     // just a bunch of application this is ez
                     setLocalMovementVector(rawMoveVector.multiplied((float) freeMoveSpeed));
                     setTargetRotation(rotation, false); // it's immediately overridden but this is so that it snaps back to the nearest rotation after exiting free mode
-                    setTurnVelocity(freeTurnSpeed * -gamepad1.right_stick_x);
+                    setTurnVelocity(freeTurnSpeed * -currentGamepadState.right_stick_x);
                 }
             }
 
@@ -403,7 +404,7 @@ public class DriveTrain extends LinearOpMode {
                     // TEST IF THE "ROTATION" VALUE INCREASES OR DECREASES WITH CLOCKWISE TURNS!!!
                     double angleOfWall = rotation - angleAgainstWall;
                     telemetry.addData("Angle of Wall", Math.toDegrees(angleOfWall));
-                    if (gamepad1.y && !lastGamepadState.y) { // set this wall as the new frame of reference
+                    if (currentGamepadState.y && !lastGamepadState.y) { // set this wall as the new frame of reference
                         setReferenceRotation(angleOfWall);
                         setTargetRotation(0, true);
                     }
@@ -416,7 +417,7 @@ public class DriveTrain extends LinearOpMode {
 
             // ARM HANDLING
             {
-                double armDir = gamepad1.right_trigger - gamepad1.left_trigger;
+                double armDir = currentGamepadState.right_trigger - currentGamepadState.left_trigger;
                 goalArmEncoderValue = Math.max(Math.min(goalArmEncoderValue + armDir * armMotorSpeed * deltaTime, armMaxEncoderValue), armMinEncoderValue);
                 armMotor.setTargetPosition((int) goalArmEncoderValue);
                 armMotor.setPower(Math.abs(armDir) > 0.05 ? 1 : 0);
@@ -433,11 +434,12 @@ public class DriveTrain extends LinearOpMode {
                 telemetry.addData("Rotation", Math.toDegrees(rotation));
                 telemetry.addData("Target Rotation", Math.toDegrees(targetRotation));
                 try {
-                    lastGamepadState.copy(gamepad1);
+                    lastGamepadState.copy(currentGamepadState);
+                    currentGamepadState.copy(gamepad1);
                 } catch (RobotCoreException e) {
                     telemetry.addData("Status", "uh oh something went horribly wrong with the gmamepad!");
                 }
-                telemetry.addData("Current Gampead", gamepad1.toString());
+                telemetry.addData("Current Gampead", currentGamepadState.toString());
                 telemetry.addData("Last Gampead", lastGamepadState.toString());
                 telemetry.update();
             }
