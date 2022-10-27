@@ -81,7 +81,7 @@ public class DriveTrain extends LinearOpMode {
     // distance sensor stuff
     private Rev2mDistanceSensor distanceSensorR = null;
     private Rev2mDistanceSensor distanceSensorL = null;
-    private double distanceBetweenSensors = 10 * 25.4; // inches to millimeters
+    private double distanceBetweenSensors = 144; // mm, need to refine value
     private double WALL_CONSIDERATION_THRESHOLD = Math.toRadians(2.5); // radians duh
 
     // arm stuff
@@ -398,7 +398,22 @@ public class DriveTrain extends LinearOpMode {
 
             // MOVEMENT HANDLING
             {
-                VectorF rawMoveVector = new VectorF(currentGamepadState.left_stick_x, currentGamepadState.left_stick_y, 0, 1);
+                VectorF rawMoveVector;
+                double xMoveFactor = currentGamepadState.left_stick_x
+                        + (currentGamepadState.dpad_right ? 1 : 0)
+                        - (currentGamepadState.dpad_left ? 1 : 0);
+                double yMoveFactor = currentGamepadState.left_stick_y
+                        + (currentGamepadState.dpad_down ? 1 : 0)
+                        - (currentGamepadState.dpad_up ? 1 : 0);
+                if (Math.abs(xMoveFactor) + Math.abs(yMoveFactor) > 0.05) {
+                    double magnitude = Math.sqrt(Math.pow(currentGamepadState.left_stick_x, 2) + Math.pow(currentGamepadState.left_stick_y, 2));
+                    magnitude = Math.min(magnitude, 1.0);
+                    double angle = Math.atan2(currentGamepadState.left_stick_y, currentGamepadState.left_stick_x);
+                    double newAngle = roundToNearest(angle, RIGHT_ANGLE/2.0);
+                    rawMoveVector = new VectorF((float) (Math.cos(newAngle) * magnitude), (float) (Math.sin(newAngle) * magnitude), 0, 1);
+                } else {
+                    rawMoveVector = new VectorF(0, 0, 0, 1);
+                }
                 if (currentGamepadState.a && !lastGamepadState.a) { // alternate movement style
                     freeMovement = !freeMovement;
                 }
