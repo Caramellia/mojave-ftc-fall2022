@@ -86,17 +86,20 @@ public class DriveTrain extends LinearOpMode {
 
     // arm stuff
     private DcMotor armMotor;
-    private double armMinEncoderValue = -3271;
-    private double armMaxEncoderValue = 0; // for now, change it once we get a concrete value
-    private double goalArmEncoderValue = 0;
-    private double armMotorSpeed = -3000; // desired encoder ticks per second
+    private int armMinEncoderValue = -3000;
+    private int armMaxEncoderValue = 0; // for now, change it once we get a concrete value
+    private int goalArmEncoderValue = 0;
+    private int armMovementStepSize = -1000;
+    private final double FULL_ARM_POWER_ENCODER_TICK_THRESHOLD = 20.0;
 
     // claw stuff
     private Servo clawServoL;
     private Servo clawServoR;
-    private double offClawPosition;
-    private double squeezeClawPosition;
-    private double clawPosition;
+    private double openClawPosL = 0.8 + 0.05;
+    private double openClawPosR = 0.275 - 0.05;
+    private double closedClawPosL = 0.575;
+    private double closedClawPosR = 0.5;
+    private boolean clawOpen = false;
 
     // wheel stuff
     private DcMotor[] wheelMap; // list of the wheel DcMotors
@@ -272,8 +275,8 @@ public class DriveTrain extends LinearOpMode {
     }
     */
 
-    private VectorF getRealMovementDelta() {
-
+    private VectorF getRealMovementDelta(int[] lastEncoders, int[] currentWheelEncoders) {
+        return new VectorF(0, 0, 0, 1);
     }
 
     @Override
@@ -329,7 +332,7 @@ public class DriveTrain extends LinearOpMode {
             armMotor = hardwareMap.get(DcMotor.class, "ArmMotor");
             armMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             telemetry.addData("Arm Status", "Reset arm motor encoder.");
-            armMotor.setTargetPosition((int) goalArmEncoderValue);
+            armMotor.setTargetPosition(goalArmEncoderValue);
             armMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
             armMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
@@ -338,6 +341,8 @@ public class DriveTrain extends LinearOpMode {
         {
             clawServoL = hardwareMap.get(Servo.class, "ClawL");
             clawServoR = hardwareMap.get(Servo.class, "ClawR");
+            clawServoL.setPosition(openClawPosL);
+            clawServoR.setPosition(openClawPosR);
         }
 
         // INITIALIZATION TELEMETRY
@@ -373,6 +378,18 @@ public class DriveTrain extends LinearOpMode {
             deltaTime = runtime.seconds() - lastTick;
             lastTick = runtime.seconds();
 
+            telemetry.addData("Controls", "Left stick to move/strafe"
+                    + "\nX to open or close claw"
+                    + "\nRight trigger to raise arm, left trigger to lower arm"
+                    + "\nA to enter free movement mode"
+                    + "\nRight stick to rotate in free movement mode"
+                    + "\nBumpers to rotate 90 degrees"
+                    + "\nY to calibrate orientation against wall"
+                );
+
+            System.arraycopy(currentWheelEncoders, 0, lastWheelEncoders, 0, 4);
+            getRealMovementDelta(lastWheelEncoders, currentWheelEncoders);
+
             // ROTATION CALCULATIONS
             {
                 updateRotationData();
@@ -396,8 +413,14 @@ public class DriveTrain extends LinearOpMode {
                         setTargetRotation(targetRotation - RIGHT_ANGLE);
                     }
                     // application
-                    applyTargetRotation();
-                    setMovementVectorRelativeToTargetOrientation(rawMoveVector);
+                    if (rawMoveVector.magnitude() < 0.01) {
+                        applyTargetRotation();
+                        setLocalMovementVector(new VectorF(0, 0, 0, 1));
+                    } else {
+                        setTurnVelocity(0);
+                        setLocalMovementVector(rawMoveVector);
+                    }
+
                 } else { // free movement
                     // just a bunch of application this is ez
                     setLocalMovementVector(rawMoveVector.multiplied((float) freeMoveSpeed));
@@ -433,17 +456,32 @@ public class DriveTrain extends LinearOpMode {
             // ARM HANDLING
             {
                 double armDir = currentGamepadState.right_trigger - currentGamepadState.left_trigger;
-                goalArmEncoderValue = Math.max(Math.min(goalArmEncoderValue + armDir * armMotorSpeed * deltaTime, armMaxEncoderValue), armMinEncoderValue);
-                armMotor.setTargetPosition((int) goalArmEncoderValue);
-                armMotor.setPower(Math.abs(armDir) > 0.05 ? 1 : 0);
+                if (currentGamepadState.right_trigger > 0.5 && lastGamepadState.right_trigger <= 0.5) {
+                    goalArmEncoderValue += armMovementStepSize;
+                }
+                if (currentGamepadState.left_trigger > 0.5 && lastGamepadState.left_trigger <= 0.5) {
+                    goalArmEncoderValue -= armMovementStepSize;
+                }
+                goalArmEncoderValue = Math.min(Math.max(goalArmEncoderValue, armMinEncoderValue), armMaxEncoderValue);
+                armMotor.setTargetPosition(goalArmEncoderValue);
+                int realArmEncoderValue = armMotor.getCurrentPosition();
+                double power = Math.min(Math.abs((double) (goalArmEncoderValue - realArmEncoderValue))/FULL_ARM_POWER_ENCODER_TICK_THRESHOLD, 1);
+                armMotor.setPower(power);
                 telemetry.addData("Arm Goal Encoder", goalArmEncoderValue);
-                telemetry.addData("Arm Actual Encoder", armMotor.getCurrentPosition());
-                telemetry.addData("Arm Motor Goal Encoder", armMotor.getTargetPosition());
+                telemetry.addData("Arm Actual Encoder", realArmEncoderValue);
+            }
+
+            // CLAW HANDLING
+            {
+                if (currentGamepadState.x && !lastGamepadState.x) {
+                    clawOpen = !clawOpen;
+                }
+                clawServoL.setPosition(clawOpen ? openClawPosL : closedClawPosL);
+                clawServoR.setPosition(clawOpen ? openClawPosR : closedClawPosR);
             }
 
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {
-                applyTargetRotation();
                 applyMovement();
                 telemetry.addData("Run Time", runtime.toString());
                 telemetry.addData("Local Movement Vector", movementVector);
