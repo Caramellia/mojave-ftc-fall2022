@@ -77,6 +77,13 @@ public class DriveTrain extends LinearOpMode {
     private Gamepad lastGamepadState = new Gamepad();
     private Gamepad currentGamepadState = new Gamepad();
     private double encoderTicksPerRevolution = 537.7;
+    private String CONTROL_STRING = "Left stick to move/strafe"
+            + "\nX to open or close claw"
+            + "\nRight trigger to raise arm, left trigger to lower arm"
+            + "\nA to enter free movement mode"
+            + "\nRight stick to rotate in free movement mode"
+            + "\nBumpers to rotate 90 degrees"
+            + "\nY to calibrate orientation against wall";
 
     // distance sensor stuff
     private Rev2mDistanceSensor distanceSensorR = null;
@@ -113,6 +120,7 @@ public class DriveTrain extends LinearOpMode {
     // movement stuff
     private boolean freeMovement = false;
     private VectorF movementVector = new VectorF(0, 0, 0, 1); // movement vector is in the bot's local space
+    private VectorF displacementVector = new VectorF(0, 0, 0, 0);
     private double freeMoveSpeed = 0.25; // multiplier for strafing speeds in "free movement" mode
     private double freeTurnSpeed = 0.25; // multiplier for turning speeds in "free movement" mode
     private double masterPower = 0.9; // master multiplier of wheel powers
@@ -228,57 +236,6 @@ public class DriveTrain extends LinearOpMode {
         return movementVector;
     }
 
-    // I stole this code from some random blog post and I'm going to edit it to make it work :)
-    /*
-    private VectorF getRealMovementDelta() {
-
-        //Compute change in encoder positions
-        delt_m0 = wheel0Pos - lastM0;
-        delt_m1 = wheel1Pos - lastM1;
-        delt_m2 = wheel2Pos - lastM2;
-        delt_m3 = wheel3Pos - lastM3;
-
-        //Compute displacements for each wheel
-        displ_m0 = delt_m0 * wheelDisplacePerEncoderCount;
-        displ_m1 = delt_m1 * wheelDisplacePerEncoderCount;
-        displ_m2 = delt_m2 * wheelDisplacePerEncoderCount;
-        displ_m3 = delt_m3 * wheelDisplacePerEncoderCount;
-
-        //Compute the average displacement in order to untangle rotation from displacement
-        displ_average = (displ_m0 + displ_m1 + displ_m2 + displ_m3) / 4.0;
-
-        //Compute the component of the wheel displacements that yield robot displacement
-        dev_m0 = displ_m0 - displ_average;
-        dev_m1 = displ_m1 - displ_average;
-        dev_m2 = displ_m2 - displ_average;
-        dev_m3 = displ_m3 - displ_average;
-
-        //Compute the displacement of the holonomic drive, in robot reference frame
-        delt_Xr = (dev_m0 + dev_m1 - dev_m2 - dev_m3) / twoSqrtTwo;
-        delt_Yr = (dev_m0 - dev_m1 - dev_m2 + dev_m3) / twoSqrtTwo;
-
-        //Move this holonomic displacement from robot to field frame of reference
-        robotTheta = IMU_ThetaRAD;
-        sinTheta = sin(robotTheta);
-        cosTheta = cos(robotTheta);
-        delt_Xf = delt_Xr * cosTheta - delt_Yr * sinTheta;
-        delt_Yf = delt_Yr * cosTheta + delt_Xr * sinTheta;
-
-        //Update the position
-        X = lastX + delt_Xf;
-        Y = lastY + delt_Yf;
-        Theta = robotTheta;
-        lastM0 = wheel0Pos;
-        lastM1 = wheel1Pos;
-        lastM2 = wheel2Pos;
-        lastM3 = wheel3Pos;
-    }
-    */
-
-    private VectorF getRealMovementDelta(int[] lastEncoders, int[] currentWheelEncoders) {
-        return new VectorF(0, 0, 0, 1);
-    }
-
     @Override
     public void runOpMode() {
 
@@ -378,17 +335,51 @@ public class DriveTrain extends LinearOpMode {
             deltaTime = runtime.seconds() - lastTick;
             lastTick = runtime.seconds();
 
-            telemetry.addData("Controls", "Left stick to move/strafe"
-                    + "\nX to open or close claw"
-                    + "\nRight trigger to raise arm, left trigger to lower arm"
-                    + "\nA to enter free movement mode"
-                    + "\nRight stick to rotate in free movement mode"
-                    + "\nBumpers to rotate 90 degrees"
-                    + "\nY to calibrate orientation against wall"
-                );
+            telemetry.addData("Controls", CONTROL_STRING);
 
-            System.arraycopy(currentWheelEncoders, 0, lastWheelEncoders, 0, 4);
-            getRealMovementDelta(lastWheelEncoders, currentWheelEncoders);
+            // MOVEMENT DELTA CALCULATIONS
+            {
+                System.arraycopy(currentWheelEncoders, 0, lastWheelEncoders, 0, 4);
+
+                for (int i = 0; i < 4; i++) {
+                    currentWheelEncoders[i] = wheelMap[i].getCurrentPosition();
+                }
+
+                /*
+                tr = lateral - strafe - turn
+                br = lateral + strafe - turn
+                tl = lateral + strafe + turn
+                bl = lateral - strafe + turn
+
+                tr - br = (lateral - strafe - turn) - (lateral + strafe - turn)
+                = lateral - lateral - strafe - strafe - turn + turn
+                = -2strafe
+
+                tr - bl = (lateral - strafe - turn) - (lateral - strafe + turn)
+                = lateral - strafe - turn - lateral + strafe - turn
+                = lateral - lateral + strafe - strafe - turn - turn
+                = 0 + 0 + -2turn
+
+                lateral = tr + tl = br + bl
+                strafe = (tl - bl)/2 = (br - tr)/2
+                turn = (tl - br)/2 = (bl - tr)/2
+                 */
+
+                double deltaTR = (double) currentWheelEncoders[0] - lastWheelEncoders[0];
+                double deltaBR = (double) currentWheelEncoders[1] - lastWheelEncoders[1];
+                double deltaTL = (double) currentWheelEncoders[2] - lastWheelEncoders[2];
+                double deltaBL = (double) currentWheelEncoders[3] - lastWheelEncoders[3];
+
+                double forwardTicks = (deltaTR + deltaTL + deltaBR + deltaBL) / 2.0; // avg of the two formulas
+                double strafeTicks = (deltaTL - deltaBL + deltaBR - deltaTR) / 4.0; // avg of the two formulas
+                double turnTicks = (deltaTL - deltaBR + deltaBL - deltaTR) / 4.0; // avg of the two formulas
+
+                double forwardDisplacement = forwardTicks * wheelDistancePerEncoderTick;
+                double sidewaysDisplacement = strafeTicks * wheelDistancePerEncoderTick;
+                displacementVector = new VectorF(
+                        displacementVector.get(0) + ((float) sidewaysDisplacement),
+                        displacementVector.get(1) + ((float) forwardDisplacement), 0, 0);
+            }
 
             // ROTATION CALCULATIONS
             {
@@ -500,6 +491,7 @@ public class DriveTrain extends LinearOpMode {
                 applyMovement();
                 telemetry.addData("Run Time", runtime.toString());
                 telemetry.addData("Local Movement Vector", movementVector);
+                telemetry.addData("Local Displacement from Motor Encoders", displacementVector);
                 telemetry.addData("Rotation", Math.toDegrees(rotation));
                 telemetry.addData("Target Rotation", Math.toDegrees(targetRotation));
                 try {
