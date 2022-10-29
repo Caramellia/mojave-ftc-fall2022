@@ -102,7 +102,7 @@ public class BaseController extends LinearOpMode {
 
     // movement stuff
     private boolean freeMovement = false;
-    private VectorF movementVector = new VectorF(0, 0, 0, 1); // movement vector is in the bot's local space
+    public VectorF movementVector = new VectorF(0, 0, 0, 1); // movement vector is in the bot's local space
     public VectorF displacementVector = new VectorF(0, 0, 0, 0);
     private double masterPower = 0.9; // master multiplier of wheel powers
     private int[] lastWheelEncoders = {0, 0, 0, 0};
