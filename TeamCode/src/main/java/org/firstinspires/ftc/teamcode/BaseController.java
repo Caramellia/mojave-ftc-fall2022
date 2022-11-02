@@ -79,14 +79,16 @@ public class BaseController extends LinearOpMode {
     private int armMinEncoderValue = -3000;
     private int armMaxEncoderValue = 0; // for now, change it once we get a concrete value
     public int goalArmEncoderValue = 0;
-    public int armMovementStepSize = -1000;
+    public int armStage = 0;
+    private int[] armStageEncoderValues = {0, -1400, -2200, -3000};
+    public int realArmEncoderValue = 0;
     private final double FULL_ARM_POWER_ENCODER_TICK_THRESHOLD = 20.0;
 
     // claw stuff
     private Servo clawServoL;
     private Servo clawServoR;
-    private double openClawPosL = 0.8 + 0.05;
-    private double openClawPosR = 0.275 - 0.05;
+    private double openClawPosL = 0.775;
+    private double openClawPosR = 0.275;
     private double closedClawPosL = 0.575;
     private double closedClawPosR = 0.5;
     public boolean clawOpen = false;
@@ -145,6 +147,14 @@ public class BaseController extends LinearOpMode {
         return (Math.round(num/interval) * interval);
     }
 
+    // arm
+    public void setArmStage(int stage) {
+        armStage = Math.max(Math.min(stage, armStageEncoderValues.length - 1), 0);
+        if (stage == 0 && clawOpen) {
+            clawOpen = false;
+        }
+    }
+
     // yeah bro
     public void applyMovement() {
         float axialMovement = movementVector.get(1);
@@ -176,7 +186,12 @@ public class BaseController extends LinearOpMode {
     public void applyTargetRotation() {
         float turnDiff = (float) normalizeAngle(targetRotation - rotation, AngleUnit.RADIANS);
         telemetry.addData("turn diff", turnDiff);
-        setTurnVelocity((float) (Math.max(Math.min(turnDiff, rotationDampeningThreshold), -rotationDampeningThreshold)/rotationDampeningThreshold * rotationPower));
+        float tvel = ((float) (Math.max(Math.min(turnDiff, rotationDampeningThreshold), -rotationDampeningThreshold)/rotationDampeningThreshold * rotationPower));
+        if (Math.abs(tvel) > 0.02) {
+            setTurnVelocity(tvel);
+        } else {
+            setTurnVelocity(0);
+        }
     }
 
     public void setReferenceRotation(double val) {
@@ -219,12 +234,6 @@ public class BaseController extends LinearOpMode {
     }
 
     public void initialize() {
-
-        // DISTANCE SENSOR SETUP
-        {
-            distanceSensorR = hardwareMap.get(Rev2mDistanceSensor.class, "DistanceR");
-            distanceSensorL = hardwareMap.get(Rev2mDistanceSensor.class, "DistanceL");
-        }
 
         // WHEEL SETUP
         {
@@ -356,7 +365,7 @@ public class BaseController extends LinearOpMode {
         updateRotationData();
 
         // ODOMETRY HANDLING
-        {
+        /*{
             double distanceL = distanceSensorL.getDistance(DistanceUnit.MM);
             double distanceR = distanceSensorR.getDistance(DistanceUnit.MM);
             telemetry.addData("Distance L", distanceL);
@@ -373,13 +382,16 @@ public class BaseController extends LinearOpMode {
             } else {
                 telemetry.addData("Wall?", "Nay");
             }
-        }
+        }*/
 
         // ARM HANDLING
         {
+            armStage = Math.max(Math.min(armStage, armStageEncoderValues.length - 1), 0);
+            goalArmEncoderValue = armStageEncoderValues[armStage];
             goalArmEncoderValue = Math.min(Math.max(goalArmEncoderValue, armMinEncoderValue), armMaxEncoderValue);
             armMotor.setTargetPosition(goalArmEncoderValue);
-            int realArmEncoderValue = armMotor.getCurrentPosition();
+            realArmEncoderValue = armMotor.getCurrentPosition();
+
             double power = Math.min(Math.abs((double) (goalArmEncoderValue - realArmEncoderValue))/FULL_ARM_POWER_ENCODER_TICK_THRESHOLD, 1);
             armMotor.setPower(power);
             telemetry.addData("Arm Goal Encoder", goalArmEncoderValue);

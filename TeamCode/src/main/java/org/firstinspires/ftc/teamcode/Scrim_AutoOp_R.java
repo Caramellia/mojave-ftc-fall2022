@@ -59,10 +59,13 @@ public class Scrim_AutoOp_R extends BaseController {
     private final double IN_TO_MM = 25.4;
     private final double SLOW_BEGIN_THRESHOLD = 12.5 * IN_TO_MM;
     private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
+    private final double ROTATION_PHASE_CHANGE_THRESHOLD = 2.5;
     private double phaseStartTime = 0;
     private boolean phaseChanged = false;
     private boolean movementPhase = true;
     private VectorF desiredDisplacement = displacementVector;
+    private boolean goToNextPhase = true;
+    private double clawOpenTime = 0;
 
     // dist: 62.5 inches
 
@@ -84,28 +87,52 @@ public class Scrim_AutoOp_R extends BaseController {
 
             baseUpdate();
             desiredDisplacement = displacementVector;
-            VectorF diff = desiredDisplacement.subtracted(displacementVector);
             double leftDst = -25 * IN_TO_MM;
             double fwdDst = -62.5 * IN_TO_MM;
             if (phase == 0) {
-                desiredDisplacement = new VectorF((float) leftDst, 0, 0);
+                clawOpen = false;
+                desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
             } else if (phase == 1) {
-                desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0);
+                desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
             } else if (phase == 2) {
-                movementPhase = false;
+                if (movementPhase) {
+                    setTargetRotation(targetRotation - 90);
+                    movementPhase = false;
+                }
+            } else if (phase == 3) {
+                movementPhase = true;
+                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst + 25.0 * IN_TO_MM), 0, 0);
+            } else if (phase == 4) {
+                if (goToNextPhase) {
+                    clawOpenTime = runtime.seconds();
+                }
+                armStage = 3;
+                goToNextPhase = false;
+                if (Math.abs(realArmEncoderValue - goalArmEncoderValue) < 10) {
+                    clawOpenTime = runtime.seconds();
+                    clawOpen = true;
+                }
+                if ((runtime.seconds() - clawOpenTime) > 5) {
+                    goToNextPhase = true;
+                }
             }
+            VectorF diff = desiredDisplacement.subtracted(displacementVector);
             if (movementPhase && diff.magnitude() > 0.0) {
                 double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
                         * Math.max(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD
                         * MAX_SPEED_MULT; // ending deceleration;
-                VectorF dir = diff.multiplied((float) (1.0/diff.magnitude())).multiplied((float) speedMult);
+                VectorF dir = diff.multiplied((float) (1.0/diff.magnitude())).multiplied((float) speedMult).multiplied((float) -1.0);
+                telemetry.addData("Movement Dir", dir);
                 setLocalMovementVector(dir);
             } else {
                 setLocalMovementVector(new VectorF(0, 0, 0, 1));
             }
-            if (movementPhase && diff.magnitude() < PHASE_CHANGE_THRESHOLD) {
-                phaseStartTime = runtime.seconds();
-                phase += 1;
+            if ((movementPhase && diff.magnitude() < PHASE_CHANGE_THRESHOLD)
+                    || (!movementPhase && Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD)) {
+                if (goToNextPhase) {
+                    phaseStartTime = runtime.seconds();
+                    phase += 1;
+                }
             }
 
             // OTHER TELEMETRY AND POST-CALCULATION STUFF

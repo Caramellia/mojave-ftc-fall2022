@@ -114,9 +114,9 @@ public class Scrim_TeleOp extends BaseController {
                     magnitude = Math.min(magnitude, 1.0);
                     double angle = Math.atan2(currentGamepadState.left_stick_y, currentGamepadState.left_stick_x);
                     double newAngle = roundToNearest(angle, RIGHT_ANGLE/2.0);
-                    rawMoveVector = new VectorF((float) (Math.cos(newAngle) * magnitude), (float) (Math.sin(newAngle) * magnitude), 0, 1);
+                    rawMoveVector = new VectorF((float) (Math.cos(newAngle) * magnitude), (float) (Math.sin(newAngle) * magnitude), 0, 0);
                 } else {
-                    rawMoveVector = new VectorF(0, 0, 0, 1);
+                    rawMoveVector = new VectorF(0, 0, 0, 0);
                 }
                 if (currentGamepadState.a && !lastGamepadState.a) { // alternate movement style
                     freeMovement = !freeMovement;
@@ -136,8 +136,9 @@ public class Scrim_TeleOp extends BaseController {
                         applyTargetRotation();
                         setLocalMovementVector(new VectorF(0, 0, 0, 1));
                     } else {
-                        setTurnVelocity(0);
-                        setLocalMovementVector(rawMoveVector);
+                        //setTurnVelocity(0);
+                        applyTargetRotation();
+                        setMovementVectorRelativeToTargetOrientation(rawMoveVector);
                     }
 
                 } else { // free movement
@@ -149,18 +150,18 @@ public class Scrim_TeleOp extends BaseController {
             }
 
             // ODOMETRY HANDLING
-            if (currentGamepadState.y && !lastGamepadState.y) { // set this wall as the new frame of reference
-                setReferenceRotation(angleOfWall);
+            if (currentGamepadState.y && !lastGamepadState.y) { // set the current rotation as the new frame of reference
+                setReferenceRotation(rotation);
                 setTargetRotation(0);
             }
 
             // ARM HANDLING
             {
                 if (currentGamepadState.right_trigger > 0.5 && lastGamepadState.right_trigger <= 0.5) {
-                    goalArmEncoderValue += armMovementStepSize;
+                    setArmStage(armStage + 1);
                 }
                 if (currentGamepadState.left_trigger > 0.5 && lastGamepadState.left_trigger <= 0.5) {
-                    goalArmEncoderValue -= armMovementStepSize;
+                    setArmStage(armStage - 1);
                 }
             }
 
