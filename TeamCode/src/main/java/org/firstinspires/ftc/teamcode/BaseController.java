@@ -196,7 +196,7 @@ public class BaseController extends LinearOpMode {
 
     public void setReferenceRotation(double val) {
         targetRotation = targetRotation - referenceRotation;
-        referenceRotation = val;
+        referenceRotation = referenceRotation + val;
         setTargetRotation(referenceRotation + targetRotation);
         updateRotationData();
     }
@@ -246,6 +246,7 @@ public class BaseController extends LinearOpMode {
 
             for (int i = 0; i < 4; i++) {
                 DcMotor motor = wheelMap[i];
+                motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
                 motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
                 motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
             }
@@ -275,7 +276,7 @@ public class BaseController extends LinearOpMode {
 
         {
             armMotor = hardwareMap.get(DcMotor.class, "ArmMotor");
-            armMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            //armMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             telemetry.addData("Arm Status", "Reset arm motor encoder.");
             armMotor.setTargetPosition(goalArmEncoderValue);
             armMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
@@ -357,7 +358,7 @@ public class BaseController extends LinearOpMode {
             double forwardDisplacement = forwardTicks * wheelDistancePerEncoderTick;
             double sidewaysDisplacement = strafeTicks * wheelDistancePerEncoderTick;
             displacementVector = new VectorF(
-                    displacementVector.get(0) + ((float) sidewaysDisplacement),
+                    displacementVector.get(0) - ((float) sidewaysDisplacement), // no clue why this is negative lmao
                     displacementVector.get(1) + ((float) forwardDisplacement), 0, 0);
         }
 

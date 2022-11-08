@@ -54,12 +54,12 @@ public class Scrim_AutoOp_R extends BaseController {
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
     private int phase = 0;
-    private final double MAX_SPEED_MULT = 0.6;
+    private final double MAX_SPEED_MULT = 0.3;
     private final double MAX_ACCEL_TIME = 1;
     private final double IN_TO_MM = 25.4;
     private final double SLOW_BEGIN_THRESHOLD = 12.5 * IN_TO_MM;
     private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
-    private final double ROTATION_PHASE_CHANGE_THRESHOLD = 2.5;
+    private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(2.5);
     private double phaseStartTime = 0;
     private boolean phaseChanged = false;
     private boolean movementPhase = true;
@@ -73,6 +73,7 @@ public class Scrim_AutoOp_R extends BaseController {
     public void runOpMode() {
 
         initialize();
+        clawOpen = true;
         waitForStart();
         runtime.reset();
 
@@ -87,7 +88,8 @@ public class Scrim_AutoOp_R extends BaseController {
 
             baseUpdate();
             desiredDisplacement = displacementVector;
-            double leftDst = -25 * IN_TO_MM;
+            // each tile is 25 in
+            double leftDst = 12.5 * IN_TO_MM;
             double fwdDst = -62.5 * IN_TO_MM;
             if (phase == 0) {
                 clawOpen = false;
@@ -96,12 +98,12 @@ public class Scrim_AutoOp_R extends BaseController {
                 desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
             } else if (phase == 2) {
                 if (movementPhase) {
-                    setTargetRotation(targetRotation - 90);
+                    setTargetRotation(targetRotation + RIGHT_ANGLE);
                     movementPhase = false;
                 }
             } else if (phase == 3) {
                 movementPhase = true;
-                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst + 25.0 * IN_TO_MM), 0, 0);
+                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst - 25.0 * IN_TO_MM), 0, 0);
             } else if (phase == 4) {
                 if (goToNextPhase) {
                     clawOpenTime = runtime.seconds();
@@ -115,20 +117,24 @@ public class Scrim_AutoOp_R extends BaseController {
                 if ((runtime.seconds() - clawOpenTime) > 5) {
                     goToNextPhase = true;
                 }
+            } else if (phase == 5) {
+                armStage = 0;
+                goToNextPhase = false;
             }
             VectorF diff = desiredDisplacement.subtracted(displacementVector);
+            telemetry.addData("Displacement diff", diff);
             if (movementPhase && diff.magnitude() > 0.0) {
                 double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
                         * Math.max(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD
                         * MAX_SPEED_MULT; // ending deceleration;
-                VectorF dir = diff.multiplied((float) (1.0/diff.magnitude())).multiplied((float) speedMult).multiplied((float) -1.0);
+                VectorF dir = diff.multiplied((float) (1.0/diff.magnitude())).multiplied((float) speedMult);
                 telemetry.addData("Movement Dir", dir);
                 setLocalMovementVector(dir);
             } else {
-                setLocalMovementVector(new VectorF(0, 0, 0, 1));
+                setLocalMovementVector(new VectorF(0, 0, 0, 0));
             }
             if ((movementPhase && diff.magnitude() < PHASE_CHANGE_THRESHOLD)
-                    || (!movementPhase && Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD)) {
+                    || (!movementPhase && Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD && (runtime.seconds() - phaseStartTime) > 1)) {
                 if (goToNextPhase) {
                     phaseStartTime = runtime.seconds();
                     phase += 1;
@@ -137,6 +143,7 @@ public class Scrim_AutoOp_R extends BaseController {
 
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {
+                applyTargetRotation();
                 applyMovement();
                 telemetry.update();
             }
