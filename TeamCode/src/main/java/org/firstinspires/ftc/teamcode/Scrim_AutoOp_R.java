@@ -55,12 +55,16 @@ public class Scrim_AutoOp_R extends BaseController {
     private final double RIGHT_ANGLE = Math.PI/2.0;
     private int phase = 0;
     private final double MAX_SPEED_MULT = 0.3;
-    private final double MAX_ACCEL_TIME = 1;
+    private final double MAX_ACCEL_TIME = 1.5;
     private final double IN_TO_MM = 25.4;
+    private final double FIELD_SIZE = 141.345;
+    private final double TILE_SIZE = FIELD_SIZE/6.0;
     private final double SLOW_BEGIN_THRESHOLD = 12.5 * IN_TO_MM;
     private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
     private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(2.5);
     private double phaseStartTime = 0;
+    private boolean phaseEndReached = false;
+    private double phaseEndReachedTime = 0;
     private boolean phaseChanged = false;
     private boolean movementPhase = true;
     private VectorF desiredDisplacement = displacementVector;
@@ -89,8 +93,8 @@ public class Scrim_AutoOp_R extends BaseController {
             baseUpdate();
             desiredDisplacement = displacementVector;
             // each tile is 25 in
-            double leftDst = 12.5 * IN_TO_MM;
-            double fwdDst = -62.5 * IN_TO_MM;
+            double leftDst = TILE_SIZE * IN_TO_MM;
+            double fwdDst = -TILE_SIZE * 2.0 * IN_TO_MM;
             if (phase == 0) {
                 clawOpen = false;
                 desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
@@ -103,7 +107,7 @@ public class Scrim_AutoOp_R extends BaseController {
                 }
             } else if (phase == 3) {
                 movementPhase = true;
-                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst - 25.0 * IN_TO_MM), 0, 0);
+                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst - TILE_SIZE), 0, 0);
             } else if (phase == 4) {
                 if (goToNextPhase) {
                     clawOpenTime = runtime.seconds();
@@ -125,8 +129,8 @@ public class Scrim_AutoOp_R extends BaseController {
             telemetry.addData("Displacement diff", diff);
             if (movementPhase && diff.magnitude() > 0.0) {
                 double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
-                        * Math.max(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD
-                        * MAX_SPEED_MULT; // ending deceleration;
+                        * Math.max(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD // ending deceleration;
+                        * MAX_SPEED_MULT;
                 VectorF dir = diff.multiplied((float) (1.0/diff.magnitude())).multiplied((float) speedMult);
                 telemetry.addData("Movement Dir", dir);
                 setLocalMovementVector(dir);
@@ -134,11 +138,14 @@ public class Scrim_AutoOp_R extends BaseController {
                 setLocalMovementVector(new VectorF(0, 0, 0, 0));
             }
             if ((movementPhase && diff.magnitude() < PHASE_CHANGE_THRESHOLD)
-                    || (!movementPhase && Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD && (runtime.seconds() - phaseStartTime) > 1)) {
-                if (goToNextPhase) {
-                    phaseStartTime = runtime.seconds();
-                    phase += 1;
-                }
+                    || (!movementPhase && Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD)) {
+                phaseEndReached = true;
+                phaseEndReachedTime = runtime.seconds();
+            }
+            if (phaseEndReached && runtime.seconds() - phaseEndReachedTime > 0.5 && goToNextPhase) {
+                phaseEndReached = false;
+                phaseStartTime = runtime.seconds();
+                phase += 1;
             }
 
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
