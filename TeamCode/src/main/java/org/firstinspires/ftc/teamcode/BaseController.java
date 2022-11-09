@@ -341,7 +341,7 @@ public class BaseController extends LinearOpMode {
             = lateral - lateral + strafe - strafe - turn - turn
             = 0 + 0 + -2turn
 
-            lateral = tr + tl = br + bl
+            lateral = (tr + tl)/2 = (br + bl))/2
             strafe = (tl - bl)/2 = (br - tr)/2
             turn = (tl - br)/2 = (bl - tr)/2
              */
@@ -351,7 +351,7 @@ public class BaseController extends LinearOpMode {
             double deltaTL = (double) currentWheelEncoders[2] - lastWheelEncoders[2];
             double deltaBL = (double) currentWheelEncoders[3] - lastWheelEncoders[3];
 
-            double forwardTicks = (deltaTR + deltaTL + deltaBR + deltaBL) / 2.0; // avg of the two formulas
+            double forwardTicks = (deltaTR + deltaTL + deltaBR + deltaBL) / 4.0; // avg of the two formulas
             double strafeTicks = (deltaTL - deltaBL + deltaBR - deltaTR) / 4.0; // avg of the two formulas
             double turnTicks = (deltaTL - deltaBR + deltaBL - deltaTR) / 4.0; // avg of the two formulas
 
