@@ -124,7 +124,7 @@ public class BaseController extends LinearOpMode {
     public double angleOfWall = 0.0;
 
     private double lastTick = 0.0;
-    private double deltaTime = 0.0;
+    public double deltaTime = 0.0;
 
     // generic math functions
     public double modulo(double a, double b) {
@@ -150,6 +150,7 @@ public class BaseController extends LinearOpMode {
     // arm
     public void setArmStage(int stage) {
         armStage = Math.max(Math.min(stage, armStageEncoderValues.length - 1), 0);
+        goalArmEncoderValue = armStageEncoderValues[armStage];
         if (stage == 0 && clawOpen) {
             clawOpen = false;
         }
@@ -387,8 +388,6 @@ public class BaseController extends LinearOpMode {
 
         // ARM HANDLING
         {
-            armStage = Math.max(Math.min(armStage, armStageEncoderValues.length - 1), 0);
-            goalArmEncoderValue = armStageEncoderValues[armStage];
             goalArmEncoderValue = Math.min(Math.max(goalArmEncoderValue, armMinEncoderValue), armMaxEncoderValue);
             armMotor.setTargetPosition(goalArmEncoderValue);
             realArmEncoderValue = armMotor.getCurrentPosition();

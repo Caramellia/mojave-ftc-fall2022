@@ -163,6 +163,7 @@ public class Scrim_TeleOp extends BaseController {
                 if (currentGamepadState.left_trigger > 0.5 && lastGamepadState.left_trigger <= 0.5) {
                     setArmStage(armStage - 1);
                 }
+                goalArmEncoderValue -= ((currentGamepadState.dpad_up ? 1 : 0) - (currentGamepadState.dpad_down ? 1 : 0)) * 750.0 * deltaTime;
             }
 
             // CLAW HANDLING
