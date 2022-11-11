@@ -169,7 +169,7 @@ public class Scrim_TeleOp extends BaseController {
             // CLAW HANDLING
             {
                 if (currentGamepadState.x && !lastGamepadState.x) {
-                    clawOpen = !clawOpen;
+                    setClawOpen(!clawOpen);
                 }
             }
 
