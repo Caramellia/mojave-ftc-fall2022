@@ -80,7 +80,7 @@ public class BaseController extends LinearOpMode {
     private int armMaxEncoderValue = 0; // for now, change it once we get a concrete value
     public int goalArmEncoderValue = 0;
     public int armStage = 0;
-    private int[] armStageEncoderValues = {0, -1400, -2200, -3000};
+    private int[] armStageEncoderValues = {0, -1400, -2200, -3400};
     public int realArmEncoderValue = 0;
     private final double FULL_ARM_POWER_ENCODER_TICK_THRESHOLD = 20.0;
 
@@ -148,11 +148,18 @@ public class BaseController extends LinearOpMode {
     }
 
     // arm
+    public void setClawOpen(boolean val) {
+        clawOpen = val;
+        clawServoL.setPosition(val ? openClawPosL : closedClawPosL);
+        clawServoR.setPosition(val ? openClawPosR : closedClawPosR);
+    }
+
     public void setArmStage(int stage) {
+        int lastStage = armStage;
         armStage = Math.max(Math.min(stage, armStageEncoderValues.length - 1), 0);
         goalArmEncoderValue = armStageEncoderValues[armStage];
-        if (stage == 0 && clawOpen) {
-            clawOpen = false;
+        if (lastStage > 0 && stage == 0 && clawOpen) {
+            setClawOpen(false);
         }
     }
 

@@ -40,6 +40,17 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.openftc.easyopencv.OpenCvCamera;
+
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.openftc.apriltag.AprilTagDetection;
+import org.openftc.easyopencv.OpenCvCamera;
+import org.openftc.easyopencv.OpenCvCameraFactory;
+import org.openftc.easyopencv.OpenCvCameraRotation;
+import org.openftc.easyopencv.OpenCvInternalCamera;
+import org.openftc.easyopencv.OpenCvInternalCamera2;
+
+import java.util.ArrayList;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -62,7 +73,7 @@ public class Scrim_AutoOp_R extends BaseController {
 
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
-    private int phase = 0;
+    private int phase = -1;
     private final double MAX_SPEED_MULT = 0.45;
     private final double MAX_ACCEL_TIME = 0.5;
     private final double IN_TO_MM = 25.4;
@@ -117,13 +128,46 @@ public class Scrim_AutoOp_R extends BaseController {
         return Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD;
     };
 
+    // opencv
+    OpenCvCamera camera;
+    AprilTagDetectionPipeline aprilTagDetectionPipeline;
+    final float DECIMATION_LOW = 2;
+    double fx = 578.272;
+    double fy = 578.272;
+    double cx = 402.145;
+    double cy = 221.506;
+    double tagsize = 0.166;
+    int zone = -1;
+
     // dist: 62.5 inches
 
     @Override
     public void runOpMode() {
 
         initialize();
-        clawOpen = true;
+
+        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
+        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
+        aprilTagDetectionPipeline = new AprilTagDetectionPipeline(tagsize, fx, fy, cx, cy);
+        aprilTagDetectionPipeline.setDecimation(DECIMATION_LOW);
+
+        camera.setPipeline(aprilTagDetectionPipeline);
+        camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
+        {
+            @Override
+            public void onOpened()
+            {
+                camera.startStreaming(800,448, OpenCvCameraRotation.UPRIGHT);
+            }
+
+            @Override
+            public void onError(int errorCode)
+            {
+
+            }
+        });
+
+        setClawOpen(false);
         waitForStart();
         runtime.reset();
 
@@ -142,39 +186,60 @@ public class Scrim_AutoOp_R extends BaseController {
         // MAIN LOOP
         while (opModeIsActive()) {
 
-
             baseUpdate();
             //desiredDisplacement = displacementVector;
             // each tile is 25 in
-            if (phase == 0) {
-                clawOpen = false;
+            telemetry.addData("Zone", zone);
+            double leftDst = -TILE_SIZE * IN_TO_MM * 1.2;
+            double fwdDst = -TILE_SIZE * 2 * IN_TO_MM;
+            if (phase == -1) {
+                setClawOpen(false);
+                if (runtime.seconds() - phaseStartTime > 1) {
+                    setArmStage(1);
+                } else {
+                    setArmStage(0);
+                }
+                goToNextPhase = false;
+                if (zone == -1) {
+                    ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
+                    if (zone == -1 && detections != null && detections.size() > 0) {
+                        zone = detections.get(0).id;
+                        goToNextPhase = true;
+                    }
+                }
+            } else if (phase == 0) {
+                setArmStage(0);
                 desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
+                goToNextPhase = true;
             } else if (phase == 1) {
                 desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
             } else if (phase == 2) {
-                if (movementPhase) {
-                    setTargetRotation(targetRotation - RIGHT_ANGLE);
-                    movementPhase = false;
-                }
+                desiredDisplacement = new VectorF((float) (leftDst/2.0), (float) (fwdDst), 0, 0);
             } else if (phase == 3) {
                 movementPhase = true;
-                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst - 4.5 * IN_TO_MM), 0, 0);
-            } else if (phase == 4) {
-                if (goToNextPhase) {
-                    clawOpenTime = runtime.seconds();
-                }
-                setArmStage(3);
                 goToNextPhase = false;
-                if (Math.abs(realArmEncoderValue - goalArmEncoderValue) < 10 && !clawOpen) {
-                    clawOpenTime = runtime.seconds();
-                    clawOpen = true;
-                }
-                if ((runtime.seconds() - clawOpenTime) > 0.5 && clawOpen) {
+                if (Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40) {
                     goToNextPhase = true;
                 }
+                setArmStage(3);
+            } else if (phase == 4) {
+                movementPhase = true;
+                desiredDisplacement = new VectorF((float) (-TILE_SIZE/2.0 * IN_TO_MM), (float) (fwdDst - 6.5 * IN_TO_MM), 0, 0);
+                goToNextPhase = runtime.seconds() - phaseEndReachedTime > 5;
             } else if (phase == 5) {
+                clawOpenTime = runtime.seconds();
+                setClawOpen(true);
+            } else if (phase == 6) {
+                desiredDisplacement = new VectorF((float) (-TILE_SIZE/2.0 * IN_TO_MM), (float) (fwdDst), 0, 0);
+
+            } else if (phase == 7) {
                 setArmStage(0);
-                goToNextPhase = false;
+                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst), 0, 0);
+            } else if (phase == 8) {
+                movementPhase = true;
+                desiredDisplacement = new VectorF((float) leftDst, (float) (-TILE_SIZE * IN_TO_MM), 0, 0);
+            } else if (phase == 9) {
+                desiredDisplacement = new VectorF((float) (zone == 1 ? leftDst : zone == 2 ? 0.0 : -leftDst), (float) (-TILE_SIZE * IN_TO_MM), 0, 0);
             }
             VectorF diff = desiredDisplacement.subtracted(displacementVector);
             telemetry.addData("Displacement diff", diff);
@@ -193,15 +258,20 @@ public class Scrim_AutoOp_R extends BaseController {
                 if (phaseEndReached == false) {
                     phaseEndReached = true;
                     phaseEndReachedTime = runtime.seconds();
+                    telemetry.addData("yeah", "buddy");
                 }
             }
+
+
             if (phaseEndReached && runtime.seconds() - phaseEndReachedTime > 0.5 && goToNextPhase) {
                 phaseEndReached = false;
                 phaseStartTime = runtime.seconds();
                 phase += 1;
             }
 
+            telemetry.addData("Go To Next Phase?", goToNextPhase);
             telemetry.addData("Phase End Reached?", phaseEndReached);
+            telemetry.addData("Phase End Reached Time", phaseEndReachedTime);
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {
                 applyTargetRotation();
