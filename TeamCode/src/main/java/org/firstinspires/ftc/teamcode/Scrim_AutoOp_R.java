@@ -73,18 +73,26 @@ import java.util.HashMap;
 // This class operates the wheels by interfacing with the gamepad and calculates motion/location data for the drive train.
 class PhaseFunction {
 
-    Supplier a;
-    Supplier b;
+    Supplier<Boolean> a;
+    Runnable b;
+    private boolean isSupplier;
 
-    public PhaseFunction(BooleanSupplier func) {
-
+    public PhaseFunction(Supplier<Boolean> func) {
+        isSupplier = true;
+        a = func;
     }
 
     public PhaseFunction(Runnable func) {
-
+        isSupplier = false;
+        b = func;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     boolean run() {
+        if (isSupplier) {
+            return a.get();
+        }
+        b.run();
         return false;
     }
 
@@ -116,14 +124,14 @@ public class Scrim_AutoOp_R extends BaseController {
     double leftDst = -TILE_SIZE;
     double fwdDst = -TILE_SIZE * 2.5;
 
-    ArrayList<HashMap> phases = new ArrayList<HashMap>();
+    ArrayList<HashMap<String, PhaseFunction>> phases = new ArrayList<HashMap<String, PhaseFunction>>();
 
-    private void addPhase(Supplier init, Supplier step, Supplier check) {
-        phases.add(new HashMap<String, Supplier>());
-        int i = phases.size();
-        phases.get(i).put("Init", init);
-        phases.get(i).put("Step", step);
-        phases.get(i).put("Check", check);
+    private void addPhase(Runnable init, Runnable step, Supplier<Boolean> check) {
+        phases.add(new HashMap<String, PhaseFunction>());
+        int i = phases.size() - 1;
+        phases.get(i).put("Init", new PhaseFunction(init));
+        phases.get(i).put("Step", new PhaseFunction(step));
+        phases.get(i).put("Check", new PhaseFunction(check));
     }
 
     Supplier<Boolean> MovementPhaseCheck = () -> {
@@ -131,7 +139,7 @@ public class Scrim_AutoOp_R extends BaseController {
         return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
     };
 
-    Supplier<Void> MovementPhaseStep = () -> {
+    Runnable MovementPhaseStep = () -> {
         VectorF diff = desiredDisplacement.subtracted(displacementVector);
         if (diff.magnitude() > 0.0) {
             double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
@@ -143,7 +151,6 @@ public class Scrim_AutoOp_R extends BaseController {
         } else {
             setLocalMovementVector(new VectorF(0, 0, 0, 0));
         }
-        return null;
     };
 
     // opencv
@@ -194,39 +201,32 @@ public class Scrim_AutoOp_R extends BaseController {
             clawOpen = false;
             setArmStage(1);
             desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
-            return null;
         }, () -> {
             ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
             if (zone == -1 && detections != null && detections.size() > 0) {
                 zone = detections.get(0).id;
             }
-            return null;
         }, () -> zone != -1);
 
 
         // navigation to pole phases
         addPhase(() -> {
             desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
-            return null;
         }, MovementPhaseStep, MovementPhaseCheck);
         addPhase(() -> {
             desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
-            return null;
         }, MovementPhaseStep, MovementPhaseCheck);
         addPhase(() -> {
             desiredDisplacement =  new VectorF((float) (-TILE_SIZE/2.0), (float) fwdDst, 0, 0);
-            return null;
         }, MovementPhaseStep, MovementPhaseCheck);
 
 
         // arm phases
         addPhase(() -> {
             setArmStage(3);
-            return null;
-        }, () -> null, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
+        }, () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
         addPhase(() -> {
             desiredDisplacement =  new VectorF((float) (-TILE_SIZE/2.0), (float) (fwdDst - 6.5 * IN_TO_MM), 0, 0);
-            return null;
         }, MovementPhaseStep, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 5.0);
         addPhase(() -> {
             desiredDisplacement =  new VectorF((float) (-TILE_SIZE/2.0), (float) fwdDst, 0, 0);
@@ -256,11 +256,10 @@ public class Scrim_AutoOp_R extends BaseController {
 
             baseUpdate();
             telemetry.addData("Zone", zone);
-            HashMap<String, FunctionalInterface> phaseFunctions = phases.get(phase);
+            HashMap<String, PhaseFunction> phaseFunctions = phases.get(phase);
 
             phaseFunctions.get("Step").run();
-
-            if (phaseEndReached == false) {
+            if (!phaseEndReached && phaseFunctions.get("Check").run()) {
                 phaseEndReached = true;
                 phaseEndReachedTime = runtime.seconds();
                 telemetry.addData("yeah", "buddy");
@@ -270,6 +269,7 @@ public class Scrim_AutoOp_R extends BaseController {
                 phaseEndReached = false;
                 phaseStartTime = runtime.seconds();
                 phase += 1;
+                phases.get(phase).get("Init").run();
             }
 
             telemetry.addData("Go To Next Phase?", goToNextPhase);
