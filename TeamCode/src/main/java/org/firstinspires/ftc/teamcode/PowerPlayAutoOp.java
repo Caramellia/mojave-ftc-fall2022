@@ -60,17 +60,6 @@ import java.util.ArrayList;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-/* TODO:
-- Add precise/slow mode
-- Make rotation in 90 degree increments in fast mode
-- Make an actually good acceleration integrator to calculate position based on IMU readings
-- Make something to identify the bot's location using cameras
-    - Use edge detection to identify borders of the images set up around the field?
-- Use TensorFlow Object Detection to identify cones
-*/
-
-// android studio test
-// This class operates the wheels by interfacing with the gamepad and calculates motion/location data for the drive train.
 class Phase {
 
     public Runnable Init;
@@ -85,8 +74,8 @@ class Phase {
 
 }
 
-@Autonomous(name="Scrim AutoOp R", group="Linear Opmode")
-public class Scrim_AutoOp_R extends BaseController {
+@Autonomous(name="PowerPlay AutoOp", group="Linear Opmode")
+public class PowerPlayAutoOp extends BaseController {
 
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
@@ -153,7 +142,7 @@ public class Scrim_AutoOp_R extends BaseController {
     @Override
     public void runOpMode() {
 
-        initialize();
+        super.initialize();
 
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
         camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
@@ -191,10 +180,16 @@ public class Scrim_AutoOp_R extends BaseController {
             }
         }, () -> zone != -1);
 
+        // reset phase
+        addPhase(() -> desiredDisplacement = new VectorF(0, (float) (-4.0 * IN_TO_MM), 0, 0), MovementPhaseStep, MovementPhaseCheck);
 
         // navigation to pole phases
         float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst));
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, 0, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            // reset the displacement vector because I don't feel like rewriting this code lololol
+            displacementVector = new VectorF(0, 0, 0, 0);
+            desiredDisplacement = new VectorF(leftDst, 0, 0, 0);
+            }, MovementPhaseStep, MovementPhaseCheck);
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst, 0, 0), MovementPhaseStep, MovementPhaseCheck);
         addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst, 0, 0), MovementPhaseStep, MovementPhaseCheck);
 

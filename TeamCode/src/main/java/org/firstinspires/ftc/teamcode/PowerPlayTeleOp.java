@@ -52,19 +52,8 @@ import org.firstinspires.ftc.robotcore.internal.system.AppUtil;
 import java.io.File;
 import java.io.IOException;
 
-/* TODO:
-- Add precise/slow mode
-- Make rotation in 90 degree increments in fast mode
-- Make an actually good acceleration integrator to calculate position based on IMU readings
-- Make something to identify the bot's location using cameras
-    - Use edge detection to identify borders of the images set up around the field?
-- Use TensorFlow Object Detection to identify cones
-*/
-
-// android studio test
-// This class operates the wheels by interfacing with the gamepad and calculates motion/location data for the drive train.
-@TeleOp(name="Scrim TeleOp", group="Linear Opmode")
-public class Scrim_TeleOp extends BaseController {
+@TeleOp(name="PowerPlay TeleOp", group="Linear Opmode")
+public class PowerPlayTeleOp extends BaseController {
 
     private Gamepad lastGamepadState = new Gamepad();
     private Gamepad currentGamepadState = new Gamepad();

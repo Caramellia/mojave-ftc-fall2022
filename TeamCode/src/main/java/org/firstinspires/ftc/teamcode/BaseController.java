@@ -373,26 +373,6 @@ public class BaseController extends LinearOpMode {
         // ROTATION CALCULATIONS
         updateRotationData();
 
-        // ODOMETRY HANDLING
-        /*{
-            double distanceL = distanceSensorL.getDistance(DistanceUnit.MM);
-            double distanceR = distanceSensorR.getDistance(DistanceUnit.MM);
-            telemetry.addData("Distance L", distanceL);
-            telemetry.addData("Distance R", distanceR);
-            double angleAgainstWall = Math.atan((distanceL - distanceR) / distanceBetweenSensors); // clockwise turn == negative angle
-            telemetry.addData("Angle Against Wall", Math.toDegrees(angleAgainstWall));
-
-            if (distanceL != Rev2mDistanceSensor.distanceOutOfRange && distanceR != Rev2mDistanceSensor.distanceOutOfRange) {
-                // TEST IF THE "ROTATION" VALUE INCREASES OR DECREASES WITH CLOCKWISE TURNS!!!
-                angleOfWall = rotation - angleAgainstWall;
-                telemetry.addData("Angle of Wall", Math.toDegrees(angleOfWall));
-                boolean isWall = Math.abs(angleOfWall - roundToNearest(angleOfWall, RIGHT_ANGLE)) < WALL_CONSIDERATION_THRESHOLD;
-                telemetry.addData("Wall?", isWall ? "Yay" : "Nay");
-            } else {
-                telemetry.addData("Wall?", "Nay");
-            }
-        }*/
-
         // ARM HANDLING
         {
             goalArmEncoderValue = Math.min(Math.max(goalArmEncoderValue, armMinEncoderValue), armMaxEncoderValue);
