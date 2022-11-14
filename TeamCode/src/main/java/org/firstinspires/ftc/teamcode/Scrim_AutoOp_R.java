@@ -29,6 +29,11 @@
 
 package org.firstinspires.ftc.teamcode;
 
+import android.os.Build;
+
+import androidx.annotation.RequiresApi;
+
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -66,14 +71,31 @@ import java.util.HashMap;
 
 // android studio test
 // This class operates the wheels by interfacing with the gamepad and calculates motion/location data for the drive train.
+class PhaseFunction() {
 
+    Supplier a;
+    Supplier b;
+
+    public PhaseFunction(BooleanSupplier func) {
+
+    }
+
+    public PhaseFunction(Runnable func) {
+
+    }
+
+    boolean run() {
+        return false;
+    }
+
+}
 
 @Autonomous(name="Scrim AutoOp R", group="Linear Opmode")
 public class Scrim_AutoOp_R extends BaseController {
 
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
-    private int phase = -1;
+    private int phase = 0;
     private final double MAX_SPEED_MULT = 0.45;
     private final double MAX_ACCEL_TIME = 0.5;
     private final double IN_TO_MM = 25.4;
@@ -96,20 +118,20 @@ public class Scrim_AutoOp_R extends BaseController {
 
     ArrayList<HashMap> phases = new ArrayList<HashMap>();
 
-    private void addPhase(Runnable init, Runnable step, BooleanSupplier check) {
-        phases.add(new HashMap<String, FunctionalInterface>());
+    private void addPhase(Supplier init, Supplier step, Supplier check) {
+        phases.add(new HashMap<String, Supplier>());
         int i = phases.size();
         phases.get(i).put("Init", init);
         phases.get(i).put("Step", step);
         phases.get(i).put("Check", check);
     }
 
-    BooleanSupplier MovementPhaseCheck = () -> {
+    Supplier<Boolean> MovementPhaseCheck = () -> {
         VectorF diff = desiredDisplacement.subtracted(displacementVector);
         return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
     };
 
-    Runnable MovementPhaseStep = () -> {
+    Supplier<Void> MovementPhaseStep = () -> {
         VectorF diff = desiredDisplacement.subtracted(displacementVector);
         if (diff.magnitude() > 0.0) {
             double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
@@ -121,11 +143,7 @@ public class Scrim_AutoOp_R extends BaseController {
         } else {
             setLocalMovementVector(new VectorF(0, 0, 0, 0));
         }
-    };
-
-    Runnable RotationPhaseStep = () -> {};
-    BooleanSupplier RotationPhaseCheck = () -> {
-        return Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD;
+        return null;
     };
 
     // opencv
@@ -141,6 +159,7 @@ public class Scrim_AutoOp_R extends BaseController {
 
     // dist: 62.5 inches
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     public void runOpMode() {
 
@@ -167,103 +186,87 @@ public class Scrim_AutoOp_R extends BaseController {
             }
         });
 
-        setClawOpen(false);
-        waitForStart();
-        runtime.reset();
-
-
         // left distance: 25 in
         // forward distance: 62.5 in
 
+        // zone detection phase
         addPhase(() -> {
             clawOpen = false;
+            setArmStage(1);
             desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
+            return null;
+        }, () -> {
+            ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
+            if (zone == -1 && detections != null && detections.size() > 0) {
+                zone = detections.get(0).id;
+            }
+            return null;
+        }, () -> zone != -1);
+
+
+        // navigation to pole phases
+        addPhase(() -> {
+            desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
+            return null;
         }, MovementPhaseStep, MovementPhaseCheck);
         addPhase(() -> {
             desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
+            return null;
         }, MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            desiredDisplacement =  new VectorF((float) (-TILE_SIZE/2.0), (float) fwdDst, 0, 0);
+            return null;
+        }, MovementPhaseStep, MovementPhaseCheck);
+
+
+        // arm phases
+        addPhase(() -> {
+            setArmStage(3);
+            return null;
+        }, () -> null, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
+        addPhase(() -> {
+            desiredDisplacement =  new VectorF((float) (-TILE_SIZE/2.0), (float) (fwdDst - 6.5 * IN_TO_MM), 0, 0);
+            return null;
+        }, MovementPhaseStep, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 5.0);
+        addPhase(() -> {
+            desiredDisplacement =  new VectorF((float) (-TILE_SIZE/2.0), (float) fwdDst, 0, 0);
+        }, MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            setArmStage(0);
+        }, () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
+
+
+        // navigation to zone phases
+        addPhase(() -> {
+            desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
+        }, MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            desiredDisplacement = new VectorF((float) leftDst, (float) (-TILE_SIZE), 0, 0);
+        }, MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            desiredDisplacement = new VectorF((float) (zone == 1 ? -TILE_SIZE : zone == 2 ? 0.0 : TILE_SIZE), (float) (-TILE_SIZE), 0, 0);
+        }, MovementPhaseStep, MovementPhaseCheck);
+
+        setClawOpen(false);
+        waitForStart();
+        runtime.reset();
 
         // MAIN LOOP
         while (opModeIsActive()) {
 
             baseUpdate();
-            //desiredDisplacement = displacementVector;
-            // each tile is 25 in
             telemetry.addData("Zone", zone);
-            double leftDst = -TILE_SIZE * IN_TO_MM * 1.2;
-            double fwdDst = -TILE_SIZE * 2 * IN_TO_MM;
-            if (phase == -1) {
-                setClawOpen(false);
-                if (runtime.seconds() - phaseStartTime > 1) {
-                    setArmStage(1);
-                } else {
-                    setArmStage(0);
-                }
-                goToNextPhase = false;
-                if (zone == -1) {
-                    ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
-                    if (zone == -1 && detections != null && detections.size() > 0) {
-                        zone = detections.get(0).id;
-                        goToNextPhase = true;
-                    }
-                }
-            } else if (phase == 0) {
-                setArmStage(0);
-                desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
-                goToNextPhase = true;
-            } else if (phase == 1) {
-                desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
-            } else if (phase == 2) {
-                desiredDisplacement = new VectorF((float) (leftDst/2.0), (float) (fwdDst), 0, 0);
-            } else if (phase == 3) {
-                movementPhase = true;
-                goToNextPhase = false;
-                if (Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40) {
-                    goToNextPhase = true;
-                }
-                setArmStage(3);
-            } else if (phase == 4) {
-                movementPhase = true;
-                desiredDisplacement = new VectorF((float) (-TILE_SIZE/2.0 * IN_TO_MM), (float) (fwdDst - 6.5 * IN_TO_MM), 0, 0);
-                goToNextPhase = runtime.seconds() - phaseEndReachedTime > 5;
-            } else if (phase == 5) {
-                clawOpenTime = runtime.seconds();
-                setClawOpen(true);
-            } else if (phase == 6) {
-                desiredDisplacement = new VectorF((float) (-TILE_SIZE/2.0 * IN_TO_MM), (float) (fwdDst), 0, 0);
+            HashMap<String, FunctionalInterface> phaseFunctions = phases.get(phase);
 
-            } else if (phase == 7) {
-                setArmStage(0);
-                desiredDisplacement = new VectorF((float) leftDst, (float) (fwdDst), 0, 0);
-            } else if (phase == 8) {
-                movementPhase = true;
-                desiredDisplacement = new VectorF((float) leftDst, (float) (-TILE_SIZE * IN_TO_MM), 0, 0);
-            } else if (phase == 9) {
-                desiredDisplacement = new VectorF((float) (zone == 1 ? leftDst : zone == 2 ? 0.0 : -leftDst), (float) (-TILE_SIZE * IN_TO_MM), 0, 0);
-            }
-            VectorF diff = desiredDisplacement.subtracted(displacementVector);
-            telemetry.addData("Displacement diff", diff);
-            if (movementPhase && diff.magnitude() > 0.0) {
-                double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
-                        * Math.min(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD // ending deceleration;
-                        * MAX_SPEED_MULT;
-                VectorF dir = diff.multiplied((float) (1.0/diff.magnitude())).multiplied((float) speedMult);
-                telemetry.addData("Movement Dir", dir);
-                setLocalMovementVector(dir);
-            } else {
-                setLocalMovementVector(new VectorF(0, 0, 0, 0));
-            }
-            if ((movementPhase && diff.magnitude() < PHASE_CHANGE_THRESHOLD)
-                    || (!movementPhase && Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD)) {
-                if (phaseEndReached == false) {
-                    phaseEndReached = true;
-                    phaseEndReachedTime = runtime.seconds();
-                    telemetry.addData("yeah", "buddy");
-                }
+            phaseFunctions.get("Step").run();
+
+            if (phaseEndReached == false) {
+                phaseEndReached = true;
+                phaseEndReachedTime = runtime.seconds();
+                telemetry.addData("yeah", "buddy");
             }
 
-
-            if (phaseEndReached && runtime.seconds() - phaseEndReachedTime > 0.5 && goToNextPhase) {
+            if (phaseEndReached && runtime.seconds() - phaseEndReachedTime > 0.5) {
                 phaseEndReached = false;
                 phaseStartTime = runtime.seconds();
                 phase += 1;
