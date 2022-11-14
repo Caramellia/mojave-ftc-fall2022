@@ -29,6 +29,10 @@
 
 package org.firstinspires.ftc.teamcode;
 
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.exception.RobotCoreException;
@@ -36,6 +40,9 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /* TODO:
 - Add precise/slow mode
@@ -48,6 +55,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 // android studio test
 // This class operates the wheels by interfacing with the gamepad and calculates motion/location data for the drive train.
+
+
 @Autonomous(name="Scrim AutoOp R", group="Linear Opmode")
 public class Scrim_AutoOp_R extends BaseController {
 
@@ -57,7 +66,7 @@ public class Scrim_AutoOp_R extends BaseController {
     private final double MAX_SPEED_MULT = 0.45;
     private final double MAX_ACCEL_TIME = 0.5;
     private final double IN_TO_MM = 25.4;
-    private final double FIELD_SIZE = 141.345;
+    private final double FIELD_SIZE = 141.345 * IN_TO_MM;
     private final double TILE_SIZE = FIELD_SIZE/6.0;
     private final double SLOW_BEGIN_THRESHOLD = 3 * IN_TO_MM;
     private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
@@ -70,6 +79,43 @@ public class Scrim_AutoOp_R extends BaseController {
     private VectorF desiredDisplacement = displacementVector;
     private boolean goToNextPhase = true;
     private double clawOpenTime = 0;
+
+    double leftDst = -TILE_SIZE;
+    double fwdDst = -TILE_SIZE * 2.5;
+
+    ArrayList<HashMap> phases = new ArrayList<HashMap>();
+
+    private void addPhase(Runnable init, Runnable step, BooleanSupplier check) {
+        phases.add(new HashMap<String, FunctionalInterface>());
+        int i = phases.size();
+        phases.get(i).put("Init", init);
+        phases.get(i).put("Step", step);
+        phases.get(i).put("Check", check);
+    }
+
+    BooleanSupplier MovementPhaseCheck = () -> {
+        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
+    };
+
+    Runnable MovementPhaseStep = () -> {
+        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        if (diff.magnitude() > 0.0) {
+            double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
+                    * Math.min(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD // ending deceleration;
+                    * MAX_SPEED_MULT;
+            VectorF dir = diff.multiplied((float) (1.0 / diff.magnitude())).multiplied((float) speedMult);
+            telemetry.addData("Movement Dir", dir);
+            setLocalMovementVector(dir);
+        } else {
+            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+        }
+    };
+
+    Runnable RotationPhaseStep = () -> {};
+    BooleanSupplier RotationPhaseCheck = () -> {
+        return Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD;
+    };
 
     // dist: 62.5 inches
 
@@ -85,16 +131,21 @@ public class Scrim_AutoOp_R extends BaseController {
         // left distance: 25 in
         // forward distance: 62.5 in
 
+        addPhase(() -> {
+            clawOpen = false;
+            desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
+        }, MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            desiredDisplacement = new VectorF((float) leftDst, (float) fwdDst, 0, 0);
+        }, MovementPhaseStep, MovementPhaseCheck);
 
         // MAIN LOOP
         while (opModeIsActive()) {
 
 
             baseUpdate();
-            desiredDisplacement = displacementVector;
+            //desiredDisplacement = displacementVector;
             // each tile is 25 in
-            double leftDst = -TILE_SIZE * IN_TO_MM;
-            double fwdDst = -TILE_SIZE * 2.5 * IN_TO_MM;
             if (phase == 0) {
                 clawOpen = false;
                 desiredDisplacement = new VectorF((float) leftDst, 0, 0, 0);
