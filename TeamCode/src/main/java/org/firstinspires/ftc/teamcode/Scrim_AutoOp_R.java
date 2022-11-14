@@ -71,7 +71,7 @@ import java.util.HashMap;
 
 // android studio test
 // This class operates the wheels by interfacing with the gamepad and calculates motion/location data for the drive train.
-class PhaseFunction() {
+class PhaseFunction {
 
     Supplier a;
     Supplier b;
