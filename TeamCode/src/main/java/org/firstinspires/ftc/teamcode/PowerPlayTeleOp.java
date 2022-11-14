@@ -29,41 +29,29 @@
 
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.hardware.bosch.BNO055IMU;
-import com.qualcomm.hardware.rev.Rev2mDistanceSensor;
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.exception.RobotCoreException;
-import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Gamepad;
-import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.util.ElapsedTime;
-import com.qualcomm.robotcore.util.ReadWriteFile;
 
-import org.firstinspires.ftc.robotcore.external.matrices.OpenGLMatrix;
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
-import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
-import org.firstinspires.ftc.robotcore.internal.system.AppUtil;
-
-import java.io.File;
-import java.io.IOException;
 
 @TeleOp(name="PowerPlay TeleOp", group="Linear Opmode")
 public class PowerPlayTeleOp extends BaseController {
 
     private Gamepad lastGamepadState = new Gamepad();
     private Gamepad currentGamepadState = new Gamepad();
-    private String CONTROL_STRING = "Left stick to move/strafe"
-            + "\nX to open or close claw"
-            + "\nRight trigger to raise arm, left trigger to lower arm"
+    private String CONTROL_STRING = "!!!! MOVEMENT CONTROLS: !!!!"
+            + "\nLeft stick to move/strafe"
+            + "\nBumpers to rotate 90 degrees"
             + "\nA to enter free movement mode"
             + "\nRight stick to rotate in free movement mode"
-            + "\nBumpers to rotate 90 degrees"
-            + "\nY to calibrate orientation against wall";
+            + "\nY to calibrate orientation"
+            + "\n"
+            + "!!!! ARM CONTROLS: !!!!"
+            + "\nX to open or close claw"
+            + "\nRight trigger to raise arm by one stage, left trigger to lower arm by one stage"
+            + "\nDpad UP to slowly raise arm, dpad DOWN to slowly lower arm";
 
     // movement stuff
     private boolean freeMovement = false;
@@ -84,9 +72,10 @@ public class PowerPlayTeleOp extends BaseController {
         // MAIN LOOP
         while (opModeIsActive()) {
 
+            telemetry.addData("Controls", CONTROL_STRING);
             baseUpdate();
 
-            telemetry.addData("Controls", CONTROL_STRING);
+
             setTargetRotation(normalizeAngle(targetRotation, AngleUnit.RADIANS)); // normalize the target rotation
 
             // MOVEMENT HANDLING
