@@ -82,8 +82,8 @@ public class PowerPlayAutoOp extends BaseController {
     private final boolean goToNextPhase = true;
     private final double clawOpenTime = 0;
 
-    float leftDst = (float) -TILE_SIZE;
-    float fwdDst = (float) (-TILE_SIZE * 2.5);
+    float leftDst = (float) (-TILE_SIZE * 1.225);
+    float fwdDst = (float) (-TILE_SIZE * 2.0);
 
     ArrayList<Phase> phases = new ArrayList<>();
 
@@ -157,39 +157,54 @@ public class PowerPlayAutoOp extends BaseController {
         addPhase(() -> {
             clawOpen = false;
             setArmStage(1);
+            telemetry.addData("Oh yeah baby!", "true");
             desiredDisplacement = new VectorF(leftDst, 0, 0, 0);
         }, () -> {
+            setArmStage(1);
             ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
             if (zone == -1 && detections != null && detections.size() > 0) {
                 zone = detections.get(0).id;
             }
         }, () -> zone != -1);
 
+        float initialOffset = (float) (-4.0 * IN_TO_MM);
+
         // reset phase
-        addPhase(() -> desiredDisplacement = new VectorF(0, (float) (-4.0 * IN_TO_MM), 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            desiredDisplacement = new VectorF(0, initialOffset, 0, 0);
+            setArmStage(0);
+            goalArmEncoderValue = -210;
+        }, MovementPhaseStep, MovementPhaseCheck);
 
         // navigation to pole phases
-        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst));
+        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.275f);
         addPhase(() -> {
             // reset the displacement vector because I don't feel like rewriting this code lololol
-            displacementVector = new VectorF(0, 0, 0, 0);
-            desiredDisplacement = new VectorF(leftDst, 0, 0, 0);
+            //displacementVector = new VectorF(0, 0, 0, 0);
+            desiredDisplacement = new VectorF(leftDst, initialOffset, 0, 0);
             }, MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
 
 
         // arm phases
         addPhase(() -> setArmStage(3), () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
-        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst - 6.5f * (float) IN_TO_MM, 0, 0), MovementPhaseStep, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 5.0);
-        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> {
+            desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset - 7.75f * (float) IN_TO_MM, 0, 0);
+        }, () -> {
+            MovementPhaseStep.run();
+            if (runtime.seconds() - phaseStartTime > 5.0) {
+                setClawOpen(true);
+            }
+        }, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 5.5);
+        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
         addPhase(() -> setArmStage(0), () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
 
 
         // navigation to zone phases
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, (float) (-TILE_SIZE), 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -TILE_SIZE : zone == 2 ? 0.0 : TILE_SIZE), (float) (-TILE_SIZE), 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> desiredDisplacement = new VectorF(leftDst, (float) (-TILE_SIZE) + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -TILE_SIZE : zone == 2 ? 0.0 : TILE_SIZE), (float) (-TILE_SIZE) + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
 
         setClawOpen(false);
         waitForStart();
@@ -201,15 +216,18 @@ public class PowerPlayAutoOp extends BaseController {
             baseUpdate();
             telemetry.addData("Zone", zone);
             Phase phaseFunc = phases.get(phase);
+            telemetry.addData("Phase", phaseFunc);
 
+            setLocalMovementVector(new VectorF(0, 0, 0, 0));
             phaseFunc.Step.run();
+            telemetry.addData("go?", phaseFunc.Check.get());
             if (!phaseEndReached && phaseFunc.Check.get()) {
                 phaseEndReached = true;
                 phaseEndReachedTime = runtime.seconds();
                 telemetry.addData("yeah", "buddy");
             }
 
-            if (phaseEndReached && runtime.seconds() - phaseEndReachedTime > 0.5) {
+            if (phaseEndReached && runtime.seconds() - phaseEndReachedTime > 0.5 && phases.size() > phase + 1) {
                 phaseEndReached = false;
                 phaseStartTime = runtime.seconds();
                 phase += 1;

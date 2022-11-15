@@ -205,7 +205,7 @@ public class BaseController extends LinearOpMode {
     // movement/strafing
     public void setWorldMovementVector(VectorF vector) {
         movementVector = rotationMatrix.multiplied(vector);
-        applyMovement();
+        //applyMovement();
     }
 
     public void setMovementVectorRelativeToTargetOrientation(VectorF vector) {
@@ -215,7 +215,7 @@ public class BaseController extends LinearOpMode {
 
     public void setLocalMovementVector(VectorF vector) {
         movementVector = vector;
-        applyMovement();
+        //applyMovement();
     }
 
     public VectorF getWorldMovementVector() {
