@@ -59,7 +59,6 @@ class Phase {
 
 }
 
-@Autonomous(name="PowerPlay AutoOp", group="Linear Opmode")
 public class PowerPlayAutoOp extends BaseController {
 
     // rotation stuff
@@ -82,7 +81,7 @@ public class PowerPlayAutoOp extends BaseController {
     private final boolean goToNextPhase = true;
     private final double clawOpenTime = 0;
 
-    float leftDst = (float) (-TILE_SIZE * 1.225);
+    float leftDst = (float) (-TILE_SIZE * 1.0);
     float fwdDst = (float) (-TILE_SIZE * 2.0);
 
     ArrayList<Phase> phases = new ArrayList<>();
@@ -167,7 +166,7 @@ public class PowerPlayAutoOp extends BaseController {
             }
         }, () -> zone != -1);
 
-        float initialOffset = (float) (-4.0 * IN_TO_MM);
+        float initialOffset = (float) (-3.5 * IN_TO_MM);
 
         // reset phase
         addPhase(() -> {
@@ -177,7 +176,7 @@ public class PowerPlayAutoOp extends BaseController {
         }, MovementPhaseStep, MovementPhaseCheck);
 
         // navigation to pole phases
-        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.275f);
+        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.15f);
         addPhase(() -> {
             // reset the displacement vector because I don't feel like rewriting this code lololol
             //displacementVector = new VectorF(0, 0, 0, 0);
@@ -190,7 +189,7 @@ public class PowerPlayAutoOp extends BaseController {
         // arm phases
         addPhase(() -> setArmStage(3), () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
         addPhase(() -> {
-            desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset - 7.75f * (float) IN_TO_MM, 0, 0);
+            desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
         }, () -> {
             MovementPhaseStep.run();
             if (runtime.seconds() - phaseStartTime > 5.0) {
@@ -204,7 +203,7 @@ public class PowerPlayAutoOp extends BaseController {
         // navigation to zone phases
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, (float) (-TILE_SIZE) + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -TILE_SIZE : zone == 2 ? 0.0 : TILE_SIZE), (float) (-TILE_SIZE) + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst)), (float) (-TILE_SIZE) + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
 
         setClawOpen(false);
         waitForStart();
@@ -244,4 +243,6 @@ public class PowerPlayAutoOp extends BaseController {
                 telemetry.update();
             }
         }
-    }}
+    }
+}
+

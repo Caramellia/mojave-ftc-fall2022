@@ -61,11 +61,11 @@ public class BaseController extends LinearOpMode {
 
     // arm stuff
     private DcMotor armMotor;
-    private int armMinEncoderValue = -3000;
+    private int armMinEncoderValue = -3150;
     private int armMaxEncoderValue = 0; // for now, change it once we get a concrete value
     public int goalArmEncoderValue = 0;
     public int armStage = 0;
-    private int[] armStageEncoderValues = {0, -1400, -2200, -3400};
+    private int[] armStageEncoderValues = {0, -1400, -2200, -3150};
     public int realArmEncoderValue = 0;
     private final double FULL_ARM_POWER_ENCODER_TICK_THRESHOLD = 20.0;
 
