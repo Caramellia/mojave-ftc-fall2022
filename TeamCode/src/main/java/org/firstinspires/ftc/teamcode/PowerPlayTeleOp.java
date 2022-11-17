@@ -101,13 +101,33 @@ public class PowerPlayTeleOp extends BaseController {
                 }
                 if (!freeMovement) {
                     // turning
-                    if (currentGamepadState.left_bumper && !lastGamepadState.left_bumper) {
-                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
-                        setTargetRotation(targetRotation + RIGHT_ANGLE);
-                    }
-                    if (currentGamepadState.right_bumper && !lastGamepadState.right_bumper) {
-                        setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
-                        setTargetRotation(targetRotation - RIGHT_ANGLE);
+                    double nearestRightAngle = roundToNearest(targetRotation, RIGHT_ANGLE);
+                    double targetRotationDiff = targetRotation - nearestRightAngle;
+                    if (Math.abs(targetRotationDiff) < 0.01) {
+                        if (currentGamepadState.left_bumper && !lastGamepadState.left_bumper) {
+                            setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
+                            setTargetRotation(targetRotation + RIGHT_ANGLE);
+                        }
+                        if (currentGamepadState.right_bumper && !lastGamepadState.right_bumper) {
+                            setTargetRotation(roundToNearest(targetRotation, RIGHT_ANGLE)); // snap target rotation to 90 degree angles
+                            setTargetRotation(targetRotation - RIGHT_ANGLE);
+                        }
+                    } else {
+                        if (normalizeAngle(targetRotation - nearestRightAngle, AngleUnit.RADIANS) < 0.0) {
+                            if (currentGamepadState.left_bumper && !lastGamepadState.left_bumper) {
+                                setTargetRotation(nearestRightAngle);
+                            }
+                            if (currentGamepadState.right_bumper && !lastGamepadState.right_bumper) {
+                                setTargetRotation(nearestRightAngle - RIGHT_ANGLE);
+                            }
+                        } else {
+                            if (currentGamepadState.left_bumper && !lastGamepadState.left_bumper) {
+                                setTargetRotation(nearestRightAngle + RIGHT_ANGLE);
+                            }
+                            if (currentGamepadState.right_bumper && !lastGamepadState.right_bumper) {
+                                setTargetRotation(nearestRightAngle);
+                            }
+                        }
                     }
                     // application
                     if (rawMoveVector.magnitude() < 0.01) {

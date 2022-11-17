@@ -166,7 +166,7 @@ public class PowerPlayAutoOp extends BaseController {
             }
         }, () -> zone != -1);
 
-        float initialOffset = (float) (-3.5 * IN_TO_MM);
+        float initialOffset = (float) (-2.5 * IN_TO_MM);
 
         // reset phase
         addPhase(() -> {
