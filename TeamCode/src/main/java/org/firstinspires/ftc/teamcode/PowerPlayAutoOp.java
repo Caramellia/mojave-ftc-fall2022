@@ -201,9 +201,8 @@ public class PowerPlayAutoOp extends BaseController {
 
 
         // navigation to zone phases
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, (float) (-TILE_SIZE) + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst)), (float) (-TILE_SIZE) + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst)),
+                (float) fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
 
         setClawOpen(false);
         waitForStart();
