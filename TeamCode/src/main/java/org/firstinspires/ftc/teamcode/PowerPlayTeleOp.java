@@ -41,6 +41,8 @@ public class PowerPlayTeleOp extends BaseController {
 
     private Gamepad lastGamepadState = new Gamepad();
     private Gamepad currentGamepadState = new Gamepad();
+    private Gamepad lastGamepad2State = new Gamepad();
+    private Gamepad currentGamepad2State = new Gamepad();
     private String CONTROL_STRING = "!!!! MOVEMENT CONTROLS: !!!!"
             + "\nLeft stick to move/strafe"
             + "\nBumpers to rotate 90 degrees"
@@ -71,6 +73,19 @@ public class PowerPlayTeleOp extends BaseController {
 
         // MAIN LOOP
         while (opModeIsActive()) {
+
+            try {
+                lastGamepadState.copy(currentGamepadState);
+                currentGamepadState.copy(gamepad1);
+            } catch (RobotCoreException e) {
+                telemetry.addData("Status", "uh oh something went horribly wrong with the gamepad!");
+            }
+            try {
+                lastGamepad2State.copy(currentGamepad2State);
+                currentGamepad2State.copy(gamepad2);
+            } catch (RobotCoreException e) {
+                telemetry.addData("Status", "uh oh something went horribly wrong with the gamepad!");
+            }
 
             telemetry.addData("Controls", CONTROL_STRING);
             baseUpdate();
@@ -155,13 +170,19 @@ public class PowerPlayTeleOp extends BaseController {
 
             // ARM HANDLING
             {
-                if (currentGamepadState.right_trigger > 0.5 && lastGamepadState.right_trigger <= 0.5) {
+                boolean goUp = currentGamepadState.right_trigger > 0.5 && lastGamepadState.right_trigger <= 0.5
+                    || currentGamepad2State.right_trigger > 0.5 && lastGamepad2State.right_trigger <= 0.5;
+                boolean goDown = currentGamepadState.left_trigger > 0.5 && lastGamepadState.left_trigger <= 0.5
+                        || currentGamepad2State.left_trigger > 0.5 && lastGamepad2State.left_trigger <= 0.5;
+                if (goUp) {
                     setArmStage(armStage + 1);
                 }
-                if (currentGamepadState.left_trigger > 0.5 && lastGamepadState.left_trigger <= 0.5) {
+                if (goDown) {
                     setArmStage(armStage - 1);
                 }
-                goalArmEncoderValue -= ((currentGamepadState.dpad_up ? 1 : 0) - (currentGamepadState.dpad_down ? 1 : 0)) * 750.0 * deltaTime;
+                double armDelta = (currentGamepadState.dpad_up ? 1 : 0) - (currentGamepadState.dpad_down ? 1 : 0)
+                        + (currentGamepad2State.dpad_up ? 1 : 0) - (currentGamepad2State.dpad_down ? 1 : 0);
+                goalArmEncoderValue -= armDelta * 750.0 * deltaTime;
             }
 
             // CLAW HANDLING
@@ -174,12 +195,6 @@ public class PowerPlayTeleOp extends BaseController {
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {
                 applyMovement();
-                try {
-                    lastGamepadState.copy(currentGamepadState);
-                    currentGamepadState.copy(gamepad1);
-                } catch (RobotCoreException e) {
-                    telemetry.addData("Status", "uh oh something went horribly wrong with the gamepad!");
-                }
                 telemetry.addData("Current Gamepad", currentGamepadState.toString());
                 telemetry.addData("Last Gamepad", lastGamepadState.toString());
                 telemetry.update();
