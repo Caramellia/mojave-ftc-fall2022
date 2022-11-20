@@ -29,19 +29,17 @@
 
 package org.firstinspires.ftc.teamcode;
 
-import android.os.Build;
-
-import androidx.annotation.RequiresApi;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
-import org.openftc.apriltag.AprilTagDetection;
+import org.opencv.core.Size;
 import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraRotation;
 
-import java.util.ArrayList;
 import java.util.function.Supplier;
 
-public class PowerPlayAutoOp extends BaseAutoOp {
+@TeleOp(name = "Pole Detection Test", group="Linear Opmode")
+public class PoleDetectionTest extends BaseController {
 
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
@@ -88,6 +86,7 @@ public class PowerPlayAutoOp extends BaseAutoOp {
     // opencv
     OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
+    ColorDetectionPipeline colorDetectionPipeline;
     final float DECIMATION_LOW = 2;
     double fx = 578.272;
     double fy = 578.272;
@@ -98,13 +97,12 @@ public class PowerPlayAutoOp extends BaseAutoOp {
 
     // dist: 62.5 inches
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    public void autoOpInitialize() {
+    @Override
+    public void runOpMode() {
 
-        aprilTagDetectionPipeline = new AprilTagDetectionPipeline(tagsize, fx, fy, cx, cy);
-        aprilTagDetectionPipeline.setDecimation(DECIMATION_LOW);
+        colorDetectionPipeline = new ColorDetectionPipeline(new Size(320, 240), 0.0, new double[]{1, 1, 0});
 
-        camera.setPipeline(aprilTagDetectionPipeline);
+        camera.setPipeline(colorDetectionPipeline);
         camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
         {
             @Override
@@ -120,55 +118,18 @@ public class PowerPlayAutoOp extends BaseAutoOp {
             }
         });
 
-        addPhase(() -> {
-            clawOpen = false;
-            setArmStage(1);
-            telemetry.addData("Oh yeah baby!", "true");
-            desiredDisplacement = new VectorF(leftDst, 0, 0, 0);
-        }, () -> {
-            setArmStage(1);
-            ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
-            if (zone == -1 && detections != null && detections.size() > 0) {
-                zone = detections.get(0).id;
-            }
-        }, () -> zone != -1);
+        initialize();
+        waitForStart();
+        runtime.reset();
 
-        float initialOffset = (float) (-2.5 * IN_TO_MM);
-
-        // reset phase
-        addPhase(() -> {
-            desiredDisplacement = new VectorF(0, initialOffset, 0, 0);
-            setArmStage(0);
-            goalArmEncoderValue = -210;
-        }, MovementPhaseStep, MovementPhaseCheck);
-
-        // navigation to pole phases
-        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.15f);
-        addPhase(() -> {
-            // reset the displacement vector because I don't feel like rewriting this code lololol
-            //displacementVector = new VectorF(0, 0, 0, 0);
-            desiredDisplacement = new VectorF(leftDst, initialOffset, 0, 0);
-        }, MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-
-        // arm phases
-        addPhase(() -> setArmStage(3), () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
-        addPhase(() -> {
-            desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
-        }, () -> {
-            MovementPhaseStep.run();
-            if (runtime.seconds() - phaseStartTime > 5.0) {
-                setClawOpen(true);
-            }
-        }, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 5.5);
-        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> setArmStage(0), () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
-
-
-        // navigation to zone phases
-        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst)),
-                (float) fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        // MAIN LOOP
+        while (opModeIsActive()) {
+            double poleDir = colorDetectionPipeline.getPoleDir();
+            telemetry.addData("Pole Dir", poleDir);
+            setLocalMovementVector(new VectorF((float) poleDir, 0, 0, 0));
+            applyMovement();
+            applyTargetRotation();
+        }
     }
 
 }
