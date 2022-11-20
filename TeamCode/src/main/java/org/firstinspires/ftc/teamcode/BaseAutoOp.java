@@ -45,7 +45,21 @@ import org.openftc.easyopencv.OpenCvCameraRotation;
 import java.util.ArrayList;
 import java.util.function.Supplier;
 
-public class PowerPlayAutoOp extends BaseAutoOp {
+class Phase {
+
+    public Runnable Init;
+    public Runnable Step;
+    public Supplier<Boolean> Check;
+
+    public Phase(Runnable initFunc, Runnable stepFunc, Supplier<Boolean> checkFunc) {
+        Init = initFunc;
+        Step = stepFunc;
+        Check = checkFunc;
+    }
+
+}
+
+public class BaseAutoOp extends BaseController {
 
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
@@ -70,24 +84,14 @@ public class PowerPlayAutoOp extends BaseAutoOp {
     float leftDst = (float) (-TILE_SIZE * 1.0);
     float fwdDst = (float) (-TILE_SIZE * 2.0);
 
-    Supplier<Boolean> MovementPhaseCheck = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
-        return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
-    };
+    public ArrayList<Phase> phases = new ArrayList<>();
 
-    Runnable MovementPhaseStep = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
-        if (diff.magnitude() > 0.0) {
-            double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
-                    * Math.min(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD // ending deceleration;
-                    * MAX_SPEED_MULT;
-            VectorF dir = diff.multiplied((float) (1.0 / diff.magnitude())).multiplied((float) speedMult);
-            telemetry.addData("Movement Dir", dir);
-            setLocalMovementVector(dir);
-        } else {
-            setLocalMovementVector(new VectorF(0, 0, 0, 0));
-        }
-    };
+    public void addPhase(Runnable init, Runnable step, Supplier<Boolean> check) {
+        phases.add(new Phase(init, step, check));
+    }
+
+    public void autoOpInitialize () {
+    }
 
     // opencv
     OpenCvCamera camera;
@@ -103,57 +107,70 @@ public class PowerPlayAutoOp extends BaseAutoOp {
     // dist: 62.5 inches
 
     @RequiresApi(api = Build.VERSION_CODES.N)
-    public void autoOpInitialize() {
-        addPhase(() -> {
-            clawOpen = false;
-            setArmStage(1);
-            telemetry.addData("Oh yeah baby!", "true");
-            desiredDisplacement = new VectorF(leftDst, 0, 0, 0);
-        }, () -> {
-            setArmStage(1);
-            ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
-            if (zone == -1 && detections != null && detections.size() > 0) {
-                zone = detections.get(0).id;
+    @Override
+    public void runOpMode() {
+
+        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
+        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
+        aprilTagDetectionPipeline = new AprilTagDetectionPipeline(tagsize, fx, fy, cx, cy);
+        aprilTagDetectionPipeline.setDecimation(DECIMATION_LOW);
+
+        camera.setPipeline(aprilTagDetectionPipeline);
+        camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
+        {
+            @Override
+            public void onOpened()
+            {
+                camera.startStreaming(800,448, OpenCvCameraRotation.UPRIGHT);
             }
-        }, () -> zone != -1);
 
-        float initialOffset = (float) (-2.5 * IN_TO_MM);
+            @Override
+            public void onError(int errorCode)
+            {
 
-        // reset phase
-        addPhase(() -> {
-            desiredDisplacement = new VectorF(0, initialOffset, 0, 0);
-            setArmStage(0);
-            goalArmEncoderValue = -210;
-        }, MovementPhaseStep, MovementPhaseCheck);
-
-        // navigation to pole phases
-        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.15f);
-        addPhase(() -> {
-            // reset the displacement vector because I don't feel like rewriting this code lololol
-            //displacementVector = new VectorF(0, 0, 0, 0);
-            desiredDisplacement = new VectorF(leftDst, initialOffset, 0, 0);
-        }, MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-
-        // arm phases
-        addPhase(() -> setArmStage(3), () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
-        addPhase(() -> {
-            desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
-        }, () -> {
-            MovementPhaseStep.run();
-            if (runtime.seconds() - phaseStartTime > 5.0) {
-                setClawOpen(true);
             }
-        }, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 5.5);
-        addPhase(() -> desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
-        addPhase(() -> setArmStage(0), () -> {}, () -> Math.abs(realArmEncoderValue - goalArmEncoderValue) < 40);
+        });
 
+        super.initialize();
+        this.autoOpInitialize();
+        
+        // left distance: 25 in
+        // forward distance: 62.5 in
 
-        // navigation to zone phases
-        addPhase(() -> desiredDisplacement = new VectorF((float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst)),
-                (float) fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+        setClawOpen(false);
+        waitForStart();
+        runtime.reset();
+
+        // MAIN LOOP
+        while (opModeIsActive()) {
+
+            baseUpdate();
+            telemetry.addData("Zone", zone);
+            Phase phaseFunc = phases.get(phase);
+            telemetry.addData("Phase", phaseFunc);
+
+            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+            phaseFunc.Step.run();
+            telemetry.addData("go?", phaseFunc.Check.get());
+            if (phaseFunc.Check.get() && phases.size() > phase + 1) {
+                phaseEndReached = true;
+                phaseStartTime = runtime.seconds();
+                phase += 1;
+                phases.get(phase).Init.run();
+                phaseEndReachedTime = runtime.seconds();
+                telemetry.addData("yeah", "buddy");
+            }
+
+            telemetry.addData("Go To Next Phase?", goToNextPhase);
+            telemetry.addData("Phase End Reached?", phaseEndReached);
+            telemetry.addData("Phase End Reached Time", phaseEndReachedTime);
+            // OTHER TELEMETRY AND POST-CALCULATION STUFF
+            {
+                applyTargetRotation();
+                applyMovement();
+                telemetry.update();
+            }
+        }
     }
-
 }
 
