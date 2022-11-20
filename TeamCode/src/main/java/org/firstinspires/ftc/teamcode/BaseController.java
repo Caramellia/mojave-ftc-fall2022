@@ -90,7 +90,8 @@ public class BaseController extends LinearOpMode {
     // movement stuff
     private boolean freeMovement = false;
     public VectorF movementVector = new VectorF(0, 0, 0, 1); // movement vector is in the bot's local space
-    public VectorF displacementVector = new VectorF(0, 0, 0, 0);
+    public VectorF displacement = new VectorF(0, 0, 0, 0);
+    private OpenGLMatrix displacementMatrix = OpenGLMatrix.identityMatrix();
     private double masterPower = 0.9; // master multiplier of wheel powers
     private int[] lastWheelEncoders = {0, 0, 0, 0};
     private int[] currentWheelEncoders = {0, 0, 0, 0};
@@ -311,6 +312,9 @@ public class BaseController extends LinearOpMode {
         deltaTime = runtime.seconds() - lastTick;
         lastTick = runtime.seconds();
 
+        // ROTATION CALCULATIONS
+        updateRotationData();
+
         // MOVEMENT DELTA CALCULATIONS
         {
             System.arraycopy(currentWheelEncoders, 0, lastWheelEncoders, 0, 4);
@@ -350,13 +354,13 @@ public class BaseController extends LinearOpMode {
 
             double forwardDisplacement = forwardTicks * wheelDistancePerEncoderTick;
             double sidewaysDisplacement = strafeTicks * wheelDistancePerEncoderTick;
-            displacementVector = new VectorF(
-                    displacementVector.get(0) - ((float) sidewaysDisplacement), // no clue why this is negative lmao
-                    displacementVector.get(1) + ((float) forwardDisplacement), 0, 0);
+            VectorF displacementDelta = new VectorF((float) -sidewaysDisplacement, (float) forwardDisplacement, 0, 0);
+            displacementMatrix = (OpenGLMatrix) displacement.multiplied(OpenGLMatrix.identityMatrix());
+            displacementMatrix.multiply(rotationMatrix);
+            displacementMatrix = (OpenGLMatrix) displacementDelta.multiplied(displacementMatrix);
+            displacement = displacementMatrix.getTranslation();
+            telemetry.addData("Displacement", displacementMatrix.formatAsTransform(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES));
         }
-
-        // ROTATION CALCULATIONS
-        updateRotationData();
 
         // ARM HANDLING
         {
@@ -380,7 +384,7 @@ public class BaseController extends LinearOpMode {
         {
             telemetry.addData("Run Time", runtime.toString());
             telemetry.addData("Local Movement Vector", movementVector);
-            telemetry.addData("Local Displacement from Motor Encoders", displacementVector);
+            //telemetry.addData("Local Displacement from Motor Encoders", displacement);
             telemetry.addData("Rotation", Math.toDegrees(rotation));
             telemetry.addData("Target Rotation", Math.toDegrees(targetRotation));
         }

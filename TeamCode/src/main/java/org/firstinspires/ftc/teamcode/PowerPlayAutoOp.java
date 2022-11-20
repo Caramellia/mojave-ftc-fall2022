@@ -33,14 +33,9 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-
-import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.openftc.apriltag.AprilTagDetection;
 import org.openftc.easyopencv.OpenCvCamera;
-import org.openftc.easyopencv.OpenCvCameraFactory;
-import org.openftc.easyopencv.OpenCvCameraRotation;
 
 import java.util.ArrayList;
 import java.util.function.Supplier;
@@ -63,7 +58,7 @@ public class PowerPlayAutoOp extends BaseAutoOp {
     private double phaseEndReachedTime = 0;
     private final boolean phaseChanged = false;
     private final boolean movementPhase = true;
-    private VectorF desiredDisplacement = displacementVector;
+    private VectorF desiredDisplacement = displacement;
     private final boolean goToNextPhase = true;
     private final double clawOpenTime = 0;
 
@@ -71,12 +66,12 @@ public class PowerPlayAutoOp extends BaseAutoOp {
     float fwdDst = (float) (-TILE_SIZE * 2.0);
 
     Supplier<Boolean> MovementPhaseCheck = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        VectorF diff = desiredDisplacement.subtracted(displacement);
         return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
     };
 
     Runnable MovementPhaseStep = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        VectorF diff = desiredDisplacement.subtracted(displacement);
         if (diff.magnitude() > 0.0) {
             double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
                     * Math.min(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD // ending deceleration;

@@ -46,7 +46,6 @@ import java.util.function.Supplier;
 public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
     // rotation stuff
-    private final double RIGHT_ANGLE = Math.PI/2.0;
     private int phase = 0;
     private final double MAX_SPEED_MULT = 0.45;
     private final double MAX_ACCEL_TIME = 0.5;
@@ -57,71 +56,65 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
     private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(2.5);
     private double phaseStartTime = 0;
-    private boolean phaseEndReached = false;
-    private double phaseEndReachedTime = 0;
-    private final boolean phaseChanged = false;
-    private final boolean movementPhase = true;
-    private VectorF desiredDisplacement = displacementVector;
-    private final boolean goToNextPhase = true;
-    private final double clawOpenTime = 0;
+    private VectorF desiredDisplacement = displacement;
 
     float leftDst = (float) (-TILE_SIZE * 1.0);
     float fwdDst = (float) (-TILE_SIZE * 2.0);
 
     Supplier<Boolean> MovementPhaseCheck = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        VectorF diff = desiredDisplacement.subtracted(displacement);
         return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
     };
 
     Runnable MovementPhaseStep = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        VectorF diff = desiredDisplacement.subtracted(displacement);
         if (diff.magnitude() > 0.0) {
             double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
                     * Math.min(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD // ending deceleration;
                     * MAX_SPEED_MULT;
             VectorF dir = diff.multiplied((float) (1.0 / diff.magnitude())).multiplied((float) speedMult);
             telemetry.addData("Movement Dir", dir);
-            setLocalMovementVector(dir);
+            setWorldMovementVector(dir);
         } else {
-            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+            setWorldMovementVector(new VectorF(0, 0, 0, 0));
         }
     };
 
     Runnable InitialMovementPhaseStep = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        VectorF diff = desiredDisplacement.subtracted(displacement);
         if (diff.magnitude() > 0.0) {
             double speedMult = (Math.min(runtime.seconds() - phaseStartTime, MAX_ACCEL_TIME) / MAX_ACCEL_TIME) // initial acceleration
                     //* Math.min(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD // ending deceleration;
                     * MAX_SPEED_MULT;
             VectorF dir = diff.multiplied((float) (1.0 / diff.magnitude())).multiplied((float) speedMult);
             telemetry.addData("Movement Dir", dir);
-            setLocalMovementVector(dir);
+            setWorldMovementVector(dir);
         } else {
-            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+            setWorldMovementVector(new VectorF(0, 0, 0, 0));
         }
     };
 
     Runnable IntermediateMovementPhaseStep = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        VectorF diff = desiredDisplacement.subtracted(displacement);
         if (diff.magnitude() > 0.0) {
             double speedMult = MAX_SPEED_MULT;
             VectorF dir = diff.multiplied((float) (1.0 / diff.magnitude())).multiplied((float) speedMult);
             telemetry.addData("Movement Dir", dir);
-            setLocalMovementVector(dir);
+            setWorldMovementVector(dir);
         } else {
-            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+            setWorldMovementVector(new VectorF(0, 0, 0, 0));
         }
     };
 
     Runnable EndMovementPhaseStep = () -> {
-        VectorF diff = desiredDisplacement.subtracted(displacementVector);
+        VectorF diff = desiredDisplacement.subtracted(displacement);
         if (diff.magnitude() > 0.0) {
             double speedMult = Math.min(diff.magnitude(), SLOW_BEGIN_THRESHOLD) / SLOW_BEGIN_THRESHOLD * MAX_SPEED_MULT;
             VectorF dir = diff.multiplied((float) (1.0 / diff.magnitude())).multiplied((float) speedMult);
             telemetry.addData("Movement Dir", dir);
-            setLocalMovementVector(dir);
+            setWorldMovementVector(dir);
         } else {
-            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+            setWorldMovementVector(new VectorF(0, 0, 0, 0));
         }
     };
 
@@ -141,6 +134,8 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
     @RequiresApi(api = Build.VERSION_CODES.N)
     public void autoOpInitialize() {
+
+        // detect zone
         addPhase(() -> {
             clawOpen = false;
             setArmStage(1);
@@ -156,38 +151,39 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
         float initialOffset = (float) (-2.5 * IN_TO_MM);
 
-        // reset phase
+        // lower arm, move to the left
         addPhase(() -> {
-            desiredDisplacement = new VectorF(0, initialOffset, 0, 0);
+            desiredDisplacement = new VectorF(leftDst, initialOffset, 0, 0);
             setArmStage(0);
             goalArmEncoderValue = -210;
         }, InitialMovementPhaseStep, MovementPhaseCheck);
 
-        // navigation to pole phases
-        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.15f);
-        addPhase(() -> {
-            // reset the displacement vector because I don't feel like rewriting this code lololol
-            //displacementVector = new VectorF(0, 0, 0, 0);
-            desiredDisplacement = new VectorF(leftDst, initialOffset, 0, 0);
-        }, IntermediateMovementPhaseStep, MovementPhaseCheck);
+        // go forward
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
 
-        // arm phases
+        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.0f);
+        // go in front of pole and raise arm
         addPhase(() -> {
             desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
             setArmStage(3);
-        }, IntermediateMovementPhaseStep, MovementPhaseCheck);
+        }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
+
+        // go further forward now that the arm is raised
         addPhase(() -> {
             desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
-        }, () -> {
-            EndMovementPhaseStep.run();
+        }, MovementPhaseStep, MovementPhaseCheck);
+
+        // open claw
+        addPhase(() -> {}, () -> {
             if (runtime.seconds() - phaseStartTime > 0.5) {
                 setClawOpen(true);
             }
         }, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 1.0);
 
+        // back up
         addPhase(() -> desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
 
+        // go to zone
         float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst));
         addPhase(() -> {
             setArmStage(0);

@@ -62,22 +62,13 @@ class Phase {
 public class BaseAutoOp extends BaseController {
 
     // rotation stuff
-    private final double RIGHT_ANGLE = Math.PI/2.0;
     private int phase = 0;
-    private final double MAX_SPEED_MULT = 0.45;
-    private final double MAX_ACCEL_TIME = 0.5;
     private final double IN_TO_MM = 25.4;
     private final double FIELD_SIZE = 141.345 * IN_TO_MM;
     private final double TILE_SIZE = FIELD_SIZE/6.0;
-    private final double SLOW_BEGIN_THRESHOLD = 3 * IN_TO_MM;
-    private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
-    private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(2.5);
     private double phaseStartTime = 0;
     private boolean phaseEndReached = false;
     private double phaseEndReachedTime = 0;
-    private final boolean phaseChanged = false;
-    private final boolean movementPhase = true;
-    private VectorF desiredDisplacement = displacementVector;
     private final boolean goToNextPhase = true;
     private final double clawOpenTime = 0;
 
