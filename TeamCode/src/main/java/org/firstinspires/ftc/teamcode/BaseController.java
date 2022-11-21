@@ -365,6 +365,15 @@ public class BaseController extends LinearOpMode {
         // ARM HANDLING
         {
             goalArmEncoderValue = Math.min(Math.max(goalArmEncoderValue, armMinEncoderValue), armMaxEncoderValue);
+            // recalculate arm stage
+            for (int i = armStageEncoderValues.length - 1; i >= 0; i--) {
+                if (i == 0) {
+                    armStage = 0;
+                } else if (goalArmEncoderValue >= (armStageEncoderValues[i] + armStageEncoderValues[i - 1])/2) {
+                    armStage = i;
+                    break;
+                }
+            }
             armMotor.setTargetPosition(goalArmEncoderValue);
             realArmEncoderValue = armMotor.getCurrentPosition();
 
