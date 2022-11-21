@@ -48,7 +48,9 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
         // for each pixel in the row at the target height, find the "color distance" to the target color
         int parsedRow = (int) Math.round(parsedRowHeight * input.rows());
-        double middleColumn = input.cols()/2.0;
+
+        double rowLength = input.cols();
+        double middleColumn = rowLength/2.0;
         ArrayList<Double> weights = new ArrayList<Double>();
         ArrayList<Double> colorDistances = new ArrayList<Double>();
         double totalWeight = 0;
@@ -57,7 +59,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
 
         // find raw color distance for each pixel
-        for (int column = 0; column < input.cols(); column++) {
+        for (int column = 0; column < rowLength; column++) {
             double[] color = input.get(parsedRow, column);
             targetRowViewerMat.put(0, column, color);
 
@@ -73,7 +75,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
         // find weights for each pixel
         final double colorDistanceRange = maxColorDistance - minColorDistance;
-        for (int i = 0; i < colorDistances.size(); i++) {
+        for (int i = 0; i < rowLength; i++) {
             double normalizedColorDistance = (colorDistances.get(i) - minColorDistance)/colorDistanceRange;
             double weight = (1.0 - normalizedColorDistance);
             totalWeight += weight;
@@ -85,12 +87,13 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
         // find the weighted average pos
         double tempAvgPos = 0.0;
-        for (int i = 0; i < weights.size(); i++) {
+        for (int i = 0; i < rowLength; i++) {
             double pos = (i - middleColumn)/middleColumn;
             double weight = weights.get(i)/totalWeight;
             tempAvgPos += pos * weight;
         }
-        tempAvgPos /= weights.size();
+        // silly goose! the weights are already normalized so that the total is 1
+        //tempAvgPos /= rowLength;
         avgPos = tempAvgPos;
         int avgPosPixel = (int) Math.floor((avgPos + 1.0) * weights.size());
         distanceViewerMat.put(0, avgPosPixel, new int[]{1, 0, 0, 0});
