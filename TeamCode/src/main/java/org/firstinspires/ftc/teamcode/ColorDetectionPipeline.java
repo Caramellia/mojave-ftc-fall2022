@@ -77,7 +77,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         final double colorDistanceRange = maxColorDistance - minColorDistance;
         for (int i = 0; i < rowLength; i++) {
             double normalizedColorDistance = (colorDistances.get(i) - minColorDistance)/colorDistanceRange;
-            double weight = (1.0 - normalizedColorDistance);
+            double weight = normalizedColorDistance < 0.5 ? (1.0 - normalizedColorDistance) : 0.0;
             totalWeight += weight;
             weights.add(weight);
             distanceViewerMat.put(0, i, new int[]{(int) weight, (int) weight, (int) weight, 0});
