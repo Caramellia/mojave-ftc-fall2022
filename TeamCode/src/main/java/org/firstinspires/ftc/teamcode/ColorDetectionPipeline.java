@@ -106,7 +106,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         return input;
     }
 
-    public double getPoleDir() {
+    public double getColorDir() {
         return avgPos;
     }
 

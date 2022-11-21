@@ -36,6 +36,7 @@ import androidx.annotation.RequiresApi;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
+import org.opencv.core.Size;
 import org.openftc.apriltag.AprilTagDetection;
 import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraRotation;
@@ -55,7 +56,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     private final double TILE_SIZE = FIELD_SIZE/6.0;
     private final double SLOW_BEGIN_THRESHOLD = 3 * IN_TO_MM;
     private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
-    private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(2.5);
+    private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(1.0);
     private double phaseStartTime = 0;
     private VectorF desiredDisplacement = displacement;
 
@@ -65,6 +66,10 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     Supplier<Boolean> MovementPhaseCheck = () -> {
         VectorF diff = desiredDisplacement.subtracted(displacement);
         return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
+    };
+
+    Supplier<Boolean> RotationPhaseCheck = () -> {
+        return Math.abs(targetRotation - rotation) < ROTATION_PHASE_CHANGE_THRESHOLD;
     };
 
     Runnable MovementPhaseStep = () -> {
@@ -123,6 +128,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     // opencv
     OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
+    ColorDetectionPipeline colorDetectionPipeline;
     final float DECIMATION_LOW = 2;
     double fx = 578.272;
     double fy = 578.272;
@@ -138,6 +144,8 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
         aprilTagDetectionPipeline = new AprilTagDetectionPipeline(tagsize, fx, fy, cx, cy);
         aprilTagDetectionPipeline.setDecimation(DECIMATION_LOW);
+        colorDetectionPipeline = new ColorDetectionPipeline(new Size(320, 240), 0.0, new double[]{1, 1, 0});
+
 
         camera.setPipeline(aprilTagDetectionPipeline);
         camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
@@ -166,6 +174,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
             ArrayList<AprilTagDetection> detections = aprilTagDetectionPipeline.getDetectionsUpdate();
             if (zone == -1 && detections != null && detections.size() > 0) {
                 zone = detections.get(0).id;
+                camera.setPipeline(colorDetectionPipeline);
             }
         }, () -> zone != -1);
 
@@ -182,26 +191,63 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
 
         float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.0f);
-        // go in front of pole and raise arm
-        addPhase(() -> {
-            desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
-            setArmStage(3);
-        }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
+        for (int i = 0; i < 3; i++) {
+            // go in front of pole and raise arm
+            addPhase(() -> {
+                setTargetRotation(0.0);
+                desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
+                setArmStage(3);
+            }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
 
-        // go further forward now that the arm is raised
-        addPhase(() -> {
-            desiredDisplacement =  new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
-        }, MovementPhaseStep, MovementPhaseCheck);
+            // calibrate pos
+            addPhase(() -> {}, () -> {
+                setMovementVectorRelativeToTargetOrientation(
+                        new VectorF((float) colorDetectionPipeline.getColorDir(), 0, 0, 0)
+                );
+            }, () -> colorDetectionPipeline.getColorDir() < 0.02);
 
-        // open claw
-        addPhase(() -> {}, () -> {
-            if (runtime.seconds() - phaseStartTime > 0.5) {
-                setClawOpen(true);
+            // go further forward now that the arm is raised
+            addPhase(() -> {
+                displacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
+                desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
+            }, MovementPhaseStep, MovementPhaseCheck);
+
+            // open claw
+            addPhase(() -> {
+            }, () -> {
+                if (runtime.seconds() - phaseStartTime > 0.5) {
+                    setClawOpen(true);
+                }
+            }, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 1.0);
+
+            // back up
+            addPhase(() -> desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
+
+            if (i < 2) {
+                addPhase(() -> setTargetRotation(-RIGHT_ANGLE), () -> {}, RotationPhaseCheck);
+                addPhase(() -> {}, () -> {
+                    setMovementVectorRelativeToTargetOrientation(
+                            new VectorF((float) -colorDetectionPipeline.getColorDir(), 0, 0, 0)
+                    );
+                }, () -> colorDetectionPipeline.getColorDir() < 0.02);
+                addPhase(() -> {
+                    displacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
+                    desiredDisplacement = new VectorF((float) TILE_SIZE, fwdDst + initialOffset, 0, 0);
+                    goalArmEncoderValue = -225;
+                    setClawOpen(true);
+                }, MovementPhaseStep, MovementPhaseCheck);
+                addPhase(() -> {
+                    setClawOpen(false);
+                }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.5);
+                addPhase(() -> {
+                    setArmStage(1);
+                }, () -> {}, () -> runtime.seconds() - phaseStartTime > 1.0);
+                addPhase(() -> {
+                    desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
+                    goalArmEncoderValue = -225;
+                }, MovementPhaseStep, MovementPhaseCheck);
             }
-        }, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 1.0);
-
-        // back up
-        addPhase(() -> desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
+        }
 
         // go to zone
         float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst));

@@ -124,7 +124,7 @@ public class PoleDetectionTest extends BaseController {
 
         // MAIN LOOP
         while (opModeIsActive()) {
-            double poleDir = colorDetectionPipeline.getPoleDir();
+            double poleDir = colorDetectionPipeline.getColorDir();
             telemetry.addData("Pole Dir", poleDir);
             setLocalMovementVector(new VectorF((float) poleDir, 0, 0, 0));
             applyMovement();

@@ -97,7 +97,7 @@ public class BaseController extends LinearOpMode {
     private int[] currentWheelEncoders = {0, 0, 0, 0};
 
     // rotation stuff
-    private final double RIGHT_ANGLE = Math.PI/2.0;
+    public final double RIGHT_ANGLE = Math.PI/2.0;
     private BNO055IMU imu;
     private OpenGLMatrix rotationMatrix = OpenGLMatrix.identityMatrix();
     private OpenGLMatrix targetRotationMatrix = OpenGLMatrix.identityMatrix();
