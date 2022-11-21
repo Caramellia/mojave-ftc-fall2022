@@ -46,7 +46,6 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         // downsample the input
         Imgproc.resize(highresInput, input, input.size(), 0, 0, Imgproc.INTER_AREA);
 
-        // for each pixel in the row at the target height, find the "color distance" to the target color
         int parsedRow = (int) Math.round(parsedRowHeight * input.rows());
 
         double rowLength = input.cols();
@@ -80,7 +79,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
             double weight = normalizedColorDistance < 0.5 ? (1.0 - normalizedColorDistance) : 0.0;
             totalWeight += weight;
             weights.add(weight);
-            distanceViewerMat.put(0, i, new int[]{(int) weight, (int) weight, (int) weight, 0});
+            distanceViewerMat.put(0, i, new double[]{weight, weight, weight, 0});
         }
 
 
@@ -96,7 +95,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         //tempAvgPos /= rowLength;
         avgPos = tempAvgPos;
         int avgPosPixel = (int) Math.floor((avgPos + 1.0) * weights.size());
-        distanceViewerMat.put(0, avgPosPixel, new int[]{1, 0, 0, 0});
+        distanceViewerMat.put(0, avgPosPixel, new double[]{1, 0, 0, 0});
 
         switch (viewportStage) {
             case 0: return input;
