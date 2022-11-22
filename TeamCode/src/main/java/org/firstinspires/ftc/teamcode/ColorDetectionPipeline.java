@@ -18,6 +18,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     private int maxViewportStage = 1;
     private Size targetRes;
     private double[] targetColor;
+    public double[] readColor;
     private double avgPos = 0;
 
     public ColorDetectionPipeline(Size targetRes, double targetRowHeight, double[] targetColor) {

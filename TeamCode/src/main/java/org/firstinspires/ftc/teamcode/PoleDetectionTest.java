@@ -132,7 +132,10 @@ public class PoleDetectionTest extends BaseController {
             telemetry.addData("Pole Dir", poleDir);
             telemetry.addData("Input Mat", colorDetectionPipeline.getInput());
             telemetry.addData("Input Color", colorDetectionPipeline.getInput().get(0, 0));
-            telemetry.addData("Input Color Type", colorDetectionPipeline.getInput().get(0, 0).getClass().getTypeName());
+            telemetry.addData("Input Color 0", colorDetectionPipeline.getInput().get(0, 0)[0]);
+            telemetry.addData("Input Color 1", colorDetectionPipeline.getInput().get(0, 0)[1]);
+            telemetry.addData("Input Color 2", colorDetectionPipeline.getInput().get(0, 0)[2]);
+            telemetry.addData("Input Color 3", colorDetectionPipeline.getInput().get(0, 0)[3]);
             setLocalMovementVector(new VectorF(0, 0, 0, 0));
             telemetry.update();
             applyMovement();
