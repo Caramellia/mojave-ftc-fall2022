@@ -37,6 +37,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.ReadWriteFile;
 
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.matrices.OpenGLMatrix;
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
@@ -44,6 +45,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.firstinspires.ftc.robotcore.internal.system.AppUtil;
+import org.openftc.easyopencv.OpenCvCamera;
+import org.openftc.easyopencv.OpenCvCameraFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -111,6 +114,8 @@ public class BaseController extends LinearOpMode {
 
     private double lastTick = 0.0;
     public double deltaTime = 0.0;
+
+    public OpenCvCamera camera;
 
     // generic math functions
     public double modulo(double a, double b) {
@@ -285,6 +290,10 @@ public class BaseController extends LinearOpMode {
             clawServoR.setPosition(openClawPosR);
         }
 
+        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
+        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
+        telemetry.addData("Camera", camera);
+
         // INITIALIZATION TELEMETRY
         {
             telemetry.addData("Gyroscope Status", imu.isGyroCalibrated() ? "Calibrated." : "Not calibrated.");
@@ -355,9 +364,18 @@ public class BaseController extends LinearOpMode {
             double forwardDisplacement = forwardTicks * wheelDistancePerEncoderTick;
             double sidewaysDisplacement = strafeTicks * wheelDistancePerEncoderTick;
             VectorF displacementDelta = new VectorF((float) -sidewaysDisplacement, (float) forwardDisplacement, 0, 0);
-            displacementMatrix = (OpenGLMatrix) displacement.multiplied(OpenGLMatrix.identityMatrix());
-            displacementMatrix.multiply(rotationMatrix);
-            displacementMatrix = (OpenGLMatrix) displacementDelta.multiplied(displacementMatrix);
+            displacementMatrix = OpenGLMatrix.identityMatrix();
+            displacementMatrix.translate(
+                    displacement.get(0),
+                    displacement.get(1),
+                    displacement.get(2)
+            );
+            displacementMatrix.multiply(rotationMatrix.transposed());
+            displacementMatrix.translate(
+                    displacementDelta.get(0),
+                    displacementDelta.get(1),
+                    displacementDelta.get(2)
+            );
             displacement = displacementMatrix.getTranslation();
             telemetry.addData("Displacement", displacementMatrix.formatAsTransform(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES));
         }
@@ -366,14 +384,14 @@ public class BaseController extends LinearOpMode {
         {
             goalArmEncoderValue = Math.min(Math.max(goalArmEncoderValue, armMinEncoderValue), armMaxEncoderValue);
             // recalculate arm stage
-            for (int i = armStageEncoderValues.length - 1; i >= 0; i--) {
+            /*for (int i = armStageEncoderValues.length - 1; i >= 0; i--) {
                 if (i == 0) {
                     armStage = 0;
                 } else if (goalArmEncoderValue >= (armStageEncoderValues[i] + armStageEncoderValues[i - 1])/2) {
                     armStage = i;
                     break;
                 }
-            }
+            }*/
             armMotor.setTargetPosition(goalArmEncoderValue);
             realArmEncoderValue = armMotor.getCurrentPosition();
 

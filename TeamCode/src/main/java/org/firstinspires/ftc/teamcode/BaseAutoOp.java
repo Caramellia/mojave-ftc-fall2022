@@ -81,7 +81,6 @@ public class BaseAutoOp extends BaseController {
     }
 
     // opencv
-    OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
     final float DECIMATION_LOW = 2;
     double fx = 578.272;
@@ -96,9 +95,6 @@ public class BaseAutoOp extends BaseController {
     @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     public void runOpMode() {
-
-        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
-        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
 
         super.initialize();
         this.autoOpInitialize();

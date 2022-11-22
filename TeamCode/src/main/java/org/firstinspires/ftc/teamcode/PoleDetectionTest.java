@@ -29,6 +29,10 @@
 
 package org.firstinspires.ftc.teamcode;
 
+import android.os.Build;
+
+import androidx.annotation.RequiresApi;
+
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
@@ -84,7 +88,6 @@ public class PoleDetectionTest extends BaseController {
     };
 
     // opencv
-    OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
     ColorDetectionPipeline colorDetectionPipeline;
     final float DECIMATION_LOW = 2;
@@ -97,9 +100,11 @@ public class PoleDetectionTest extends BaseController {
 
     // dist: 62.5 inches
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void runOpMode() {
 
+        initialize();
         colorDetectionPipeline = new ColorDetectionPipeline(new Size(320, 240), 0.0, new double[]{1, 1, 0});
 
         camera.setPipeline(colorDetectionPipeline);
@@ -118,7 +123,6 @@ public class PoleDetectionTest extends BaseController {
             }
         });
 
-        initialize();
         waitForStart();
         runtime.reset();
 
@@ -126,7 +130,11 @@ public class PoleDetectionTest extends BaseController {
         while (opModeIsActive()) {
             double poleDir = colorDetectionPipeline.getColorDir();
             telemetry.addData("Pole Dir", poleDir);
-            setLocalMovementVector(new VectorF((float) poleDir, 0, 0, 0));
+            telemetry.addData("Input Mat", colorDetectionPipeline.getInput());
+            telemetry.addData("Input Color", colorDetectionPipeline.getInput().get(0, 0));
+            telemetry.addData("Input Color Type", colorDetectionPipeline.getInput().get(0, 0).getClass().getTypeName());
+            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+            telemetry.update();
             applyMovement();
             applyTargetRotation();
         }

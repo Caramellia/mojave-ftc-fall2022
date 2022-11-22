@@ -86,7 +86,6 @@ public class PowerPlayAutoOp extends BaseAutoOp {
     };
 
     // opencv
-    OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
     final float DECIMATION_LOW = 2;
     double fx = 578.272;

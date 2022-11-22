@@ -126,7 +126,6 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
 
     // opencv
-    OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
     ColorDetectionPipeline colorDetectionPipeline;
     final float DECIMATION_LOW = 2;

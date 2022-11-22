@@ -60,7 +60,9 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         // find raw color distance for each pixel
         for (int column = 0; column < rowLength; column++) {
             double[] color = input.get(parsedRow, column);
-            targetRowViewerMat.put(0, column, color);
+            for (int row = 0; row < 100; row++) {
+                targetRowViewerMat.put(row, column, color);
+            }
 
             double colorDistance = Math.sqrt(
                     Math.pow(color[0] - targetColor[0], 2)
@@ -79,7 +81,9 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
             double weight = normalizedColorDistance < 0.5 ? (1.0 - normalizedColorDistance) : 0.0;
             totalWeight += weight;
             weights.add(weight);
-            distanceViewerMat.put(0, i, new double[]{weight, weight, weight, 0});
+            for (int row = 0; row < 100; row++) {
+                //distanceViewerMat.put(row, i, new int[]{(int) (weight * 255), (int) (weight * 255), (int) (weight * 255), (int) (255 * 0.5)});
+            }
         }
 
 
@@ -95,18 +99,27 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         //tempAvgPos /= rowLength;
         avgPos = tempAvgPos;
         int avgPosPixel = (int) Math.floor((avgPos + 1.0) * weights.size());
-        distanceViewerMat.put(0, avgPosPixel, new double[]{1, 0, 0, 0});
+        //distanceViewerMat.put(0, avgPosPixel, new int[]{255, 0, 0, 0});
 
-        switch (viewportStage) {
+        /*switch (viewportStage) {
             case 0: return input;
             case 1: return targetRowViewerMat;
             case 2: return distanceViewerMat;
-        }
+        }*/
         return input;
+        //return distanceViewerMat;
     }
 
     public double getColorDir() {
         return avgPos;
+    }
+
+    public Mat getInput() {
+        return input;
+    }
+
+    public Mat getDistanceViewerMat() {
+        return distanceViewerMat;
     }
 
 }
