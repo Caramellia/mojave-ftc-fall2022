@@ -199,6 +199,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
             }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
 
             // calibrate pos
+            colorDetectionPipeline.setTargetColor(new double[]{1, 1, 0});
             addPhase(() -> {}, () -> {
                 setMovementVectorRelativeToTargetOrientation(
                         new VectorF((float) colorDetectionPipeline.getColorDir(), 0, 0, 0)
@@ -224,6 +225,8 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
             if (i < 2) {
                 addPhase(() -> setTargetRotation(-RIGHT_ANGLE), () -> {}, RotationPhaseCheck);
+                // align with cones
+                colorDetectionPipeline.setTargetColor(new double[]{0, 0, 1});
                 addPhase(() -> {}, () -> {
                     setMovementVectorRelativeToTargetOrientation(
                             new VectorF((float) -colorDetectionPipeline.getColorDir(), 0, 0, 0)

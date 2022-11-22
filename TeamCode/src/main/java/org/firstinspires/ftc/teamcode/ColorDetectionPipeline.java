@@ -40,6 +40,10 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         }
     }
 
+    public void setTargetColor(double[] color) {
+        targetColor = color;
+    }
+
     @Override
     public Mat processFrame(Mat highresInput)
     {
