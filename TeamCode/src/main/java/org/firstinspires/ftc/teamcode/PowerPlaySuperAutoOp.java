@@ -143,7 +143,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
         aprilTagDetectionPipeline = new AprilTagDetectionPipeline(tagsize, fx, fy, cx, cy);
         aprilTagDetectionPipeline.setDecimation(DECIMATION_LOW);
-        colorDetectionPipeline = new ColorDetectionPipeline(new Size(320, 240), 0.0, new double[]{1, 1, 0});
+        colorDetectionPipeline = new ColorDetectionPipeline(new Size(320, 240), 0.0, 0.1, new double[]{1, 1, 0});
 
 
         camera.setPipeline(aprilTagDetectionPipeline);

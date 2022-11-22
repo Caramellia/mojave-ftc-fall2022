@@ -10,31 +10,38 @@ import java.util.ArrayList;
 
 public class ColorDetectionPipeline extends OpenCvPipeline {
 
+    public double highRowHeight;
+    public double lowRowHeight;
     private Mat targetRowViewerMat;
     private Mat distanceViewerMat;
     private Mat input;
+    private Mat inputSubmat;
+    private Mat squishedInput;
     private double parsedRowHeight;
     private int viewportStage = 0;
-    private int maxViewportStage = 1;
+    private int maxViewportStage = 2;
+    private int viewerHeight = 100;
     private Size targetRes;
     private double[] targetColor;
     public double[] readColor;
     private double avgPos = 0;
 
-    public ColorDetectionPipeline(Size targetRes, double targetRowHeight, double[] targetColor) {
-        this.parsedRowHeight = targetRowHeight;
+    public ColorDetectionPipeline(Size targetRes, double highTargetRowHeight, double lowTargetRowHeight, double[] targetColor) {
+        this.highRowHeight = highTargetRowHeight;
+        this.lowRowHeight = lowTargetRowHeight;
         this.targetColor = targetColor;
         this.targetRes = targetRes;
         this.input = new Mat(targetRes, CvType.CV_8UC4);
-        Size rowSize = new Size((int) targetRes.width, 1);
+        Size rowSize = new Size((int) targetRes.width, viewerHeight);
         this.distanceViewerMat = new Mat(rowSize, CvType.CV_8UC4);
         this.targetRowViewerMat = new Mat(rowSize, CvType.CV_8UC4);
+        this.squishedInput = new Mat(1, (int) targetRes.width, CvType.CV_8UC4);
     }
 
     @Override
     public void onViewportTapped()
     {
-        viewportStage++;
+        viewportStage += 1;
         if (viewportStage > maxViewportStage) {
             viewportStage = 0;
         }
@@ -50,24 +57,27 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
         // downsample the input
         Imgproc.resize(highresInput, input, input.size(), 0, 0, Imgproc.INTER_AREA);
+        int highRow = (int) Math.round(highRowHeight * input.rows());
+        int lowRow = (int) Math.round(lowRowHeight * input.rows());
+        // get the submat of the input
+        inputSubmat = input.submat(highRow, lowRow, 0, input.cols());
+        Imgproc.resize(inputSubmat, squishedInput, squishedInput.size(), 0, 0, Imgproc.INTER_AREA);
 
-        int parsedRow = (int) Math.round(parsedRowHeight * input.rows());
 
-        double rowLength = input.cols();
-        double middleColumn = rowLength/2.0;
+        double rowLength = squishedInput.cols();
         ArrayList<Double> weights = new ArrayList<Double>();
         ArrayList<Double> colorDistances = new ArrayList<Double>();
         double totalWeight = 0;
-        double maxColorDistance = -Double.MAX_VALUE;
-        double minColorDistance = Double.MAX_VALUE;
+        double maxColorDistance = -100000;
+        double minColorDistance = 100000;
 
 
         // find raw color distance for each pixel
         for (int column = 0; column < rowLength; column++) {
-            double[] color = input.get(parsedRow, column);
-            for (int row = 0; row < 100; row++) {
-                targetRowViewerMat.put(row, column, color);
-            }
+            double[] color = squishedInput.get(0, column);
+            /*for (int row = 0; row < 100; row++) {
+                targetRowViewerMat.put(row, column, color.clone());
+            }*/
 
             double colorDistance = Math.sqrt(
                     Math.pow(color[0] - targetColor[0], 2)
@@ -81,38 +91,38 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
         // find weights for each pixel
         final double colorDistanceRange = maxColorDistance - minColorDistance;
+        double middleColumn = rowLength/2.0;
+        boolean onChunk = false;
+        double smallestChunkDistance = 10000;
+        double currentSmallestChunkStart = 0;
+        double currentSmallestChunkEnd = 0;
         for (int i = 0; i < rowLength; i++) {
-            double normalizedColorDistance = (colorDistances.get(i) - minColorDistance)/colorDistanceRange;
-            double weight = normalizedColorDistance < 0.5 ? (1.0 - normalizedColorDistance) : 0.0;
-            totalWeight += weight;
-            weights.add(weight);
-            for (int row = 0; row < 100; row++) {
-                //distanceViewerMat.put(row, i, new int[]{(int) (weight * 255), (int) (weight * 255), (int) (weight * 255), (int) (255 * 0.5)});
+            double pos = (double) i;
+            double colorDistance = colorDistances.get(i);
+            double normalizedColorDistance = (colorDistance - minColorDistance)/colorDistanceRange;
+            if (normalizedColorDistance < 0.25) {
+                double chunkDistance = pos - middleColumn;
+                if (Math.abs(chunkDistance) < Math.abs(smallestChunkDistance) && !onChunk) {
+                    smallestChunkDistance = chunkDistance;
+                    currentSmallestChunkStart = pos;
+                }
+                onChunk = true;
+            } else if (onChunk) {
+                onChunk = false;
+                if (smallestChunkDistance == (currentSmallestChunkStart - middleColumn)) {
+                    currentSmallestChunkEnd = pos - 1.0;
+                }
             }
         }
 
+        avgPos = ((currentSmallestChunkStart + currentSmallestChunkEnd)/2.0 - middleColumn)/middleColumn;
 
-
-        // find the weighted average pos
-        double tempAvgPos = 0.0;
-        for (int i = 0; i < rowLength; i++) {
-            double pos = (i - middleColumn)/middleColumn;
-            double weight = weights.get(i)/totalWeight;
-            tempAvgPos += pos * weight;
-        }
-        // silly goose! the weights are already normalized so that the total is 1
-        //tempAvgPos /= rowLength;
-        avgPos = tempAvgPos;
-        int avgPosPixel = (int) Math.floor((avgPos + 1.0) * weights.size());
-        //distanceViewerMat.put(0, avgPosPixel, new int[]{255, 0, 0, 0});
-
-        /*switch (viewportStage) {
+        switch (viewportStage) {
             case 0: return input;
             case 1: return targetRowViewerMat;
             case 2: return distanceViewerMat;
-        }*/
-        return targetRowViewerMat;
-        //return distanceViewerMat;
+        }
+        return distanceViewerMat;
     }
 
     public double getColorDir() {

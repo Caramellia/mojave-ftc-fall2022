@@ -376,7 +376,8 @@ public class BaseController extends LinearOpMode {
                     displacementDelta.get(1),
                     displacementDelta.get(2)
             );
-            displacement = displacementMatrix.getTranslation();
+            VectorF tempDisplacement = displacementMatrix.getTranslation();
+            displacement = new VectorF(tempDisplacement.get(0), tempDisplacement.get(1), tempDisplacement.get(2), 0);
             telemetry.addData("Displacement", displacementMatrix.formatAsTransform(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES));
         }
 

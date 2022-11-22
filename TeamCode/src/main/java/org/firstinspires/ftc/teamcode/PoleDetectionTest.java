@@ -105,7 +105,7 @@ public class PoleDetectionTest extends BaseController {
     public void runOpMode() {
 
         initialize();
-        colorDetectionPipeline = new ColorDetectionPipeline(new Size(320, 240), 0.0, new double[]{1, 1, 0});
+        colorDetectionPipeline = new ColorDetectionPipeline(new Size(50, 240), 0.0, 0.1, new double[]{255, 255, 0});
 
         camera.setPipeline(colorDetectionPipeline);
         camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
@@ -113,7 +113,7 @@ public class PoleDetectionTest extends BaseController {
             @Override
             public void onOpened()
             {
-                camera.startStreaming(800,448, OpenCvCameraRotation.UPRIGHT);
+                camera.startStreaming(320,240, OpenCvCameraRotation.UPRIGHT);
             }
 
             @Override
@@ -136,7 +136,7 @@ public class PoleDetectionTest extends BaseController {
             telemetry.addData("Input Color 1", colorDetectionPipeline.getInput().get(0, 0)[1]);
             telemetry.addData("Input Color 2", colorDetectionPipeline.getInput().get(0, 0)[2]);
             telemetry.addData("Input Color 3", colorDetectionPipeline.getInput().get(0, 0)[3]);
-            setLocalMovementVector(new VectorF(0, 0, 0, 0));
+            setLocalMovementVector(new VectorF((float) poleDir * 0.35f, 0, 0, 0));
             telemetry.update();
             applyMovement();
             applyTargetRotation();
