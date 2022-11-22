@@ -107,7 +107,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
             case 1: return targetRowViewerMat;
             case 2: return distanceViewerMat;
         }*/
-        return input;
+        return targetRowViewerMat;
         //return distanceViewerMat;
     }
 
