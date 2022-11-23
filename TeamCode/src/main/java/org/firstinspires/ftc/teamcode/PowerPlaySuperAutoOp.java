@@ -200,11 +200,15 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
             // calibrate pos
             colorDetectionPipeline.setTargetColor(new double[]{1, 1, 0});
+            colorDetectionPipeline.highRowHeight = 0.0;
+            colorDetectionPipeline.lowRowHeight = 0.1;
             addPhase(() -> {}, () -> {
+                double dir = colorDetectionPipeline.getColorDir();
+                telemetry.addData("Pole Dir", dir);
                 setMovementVectorRelativeToTargetOrientation(
-                        new VectorF((float) colorDetectionPipeline.getColorDir(), 0, 0, 0)
+                        new VectorF((float) dir * 0.5f, 0, 0, 0)
                 );
-            }, () -> colorDetectionPipeline.getColorDir() < 0.02);
+            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 5/50);
 
             // go further forward now that the arm is raised
             addPhase(() -> {
@@ -224,14 +228,19 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
             addPhase(() -> desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
 
             if (i < 2) {
-                addPhase(() -> setTargetRotation(-RIGHT_ANGLE), () -> {}, RotationPhaseCheck);
+                addPhase(() -> {
+                    setTargetRotation(-RIGHT_ANGLE);
+                    setArmStage(0);
+                }, () -> {}, RotationPhaseCheck);
                 // align with cones
                 colorDetectionPipeline.setTargetColor(new double[]{0, 0, 1});
+                colorDetectionPipeline.highRowHeight = 0.6;
+                colorDetectionPipeline.lowRowHeight = 0.7;
                 addPhase(() -> {}, () -> {
                     setMovementVectorRelativeToTargetOrientation(
-                            new VectorF((float) -colorDetectionPipeline.getColorDir(), 0, 0, 0)
+                            new VectorF((float) colorDetectionPipeline.getColorDir() * 0.5f, 0, 0, 0)
                     );
-                }, () -> colorDetectionPipeline.getColorDir() < 0.02);
+                }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 5/50);
                 addPhase(() -> {
                     displacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
                     desiredDisplacement = new VectorF((float) TILE_SIZE, fwdDst + initialOffset, 0, 0);
