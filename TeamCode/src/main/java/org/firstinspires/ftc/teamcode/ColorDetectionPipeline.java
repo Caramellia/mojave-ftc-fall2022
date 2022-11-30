@@ -25,6 +25,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     private double[] targetColor;
     public double[] readColor;
     private double avgPos = 0;
+    private boolean debug = true;
 
     public ColorDetectionPipeline(Size targetRes, double highTargetRowHeight, double lowTargetRowHeight, double[] targetColor) {
         this.highRowHeight = highTargetRowHeight;
@@ -75,9 +76,11 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         // find raw color distance for each pixel
         for (int column = 0; column < rowLength; column++) {
             double[] color = squishedInput.get(0, column);
-            /*for (int row = 0; row < 100; row++) {
-                targetRowViewerMat.put(row, column, color.clone());
-            }*/
+            if (debug) {
+                for (int row = 0; row < 100; row++) {
+                    targetRowViewerMat.put(row, column, color.clone());
+                }
+            }
 
             double colorDistance = Math.sqrt(
                     Math.pow(color[0] - targetColor[0], 2)
@@ -100,6 +103,12 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
             double pos = (double) i;
             double colorDistance = colorDistances.get(i);
             double normalizedColorDistance = (colorDistance - minColorDistance)/colorDistanceRange;
+            if (debug) {
+                double viewerColor = normalizedColorDistance < 0.25 ? 255 : 0;
+                for (int row = 0; row < 100; row++) {
+                    distanceViewerMat.put(row, i, new double[]{viewerColor, viewerColor, viewerColor, 255});
+                }
+            }
             if (normalizedColorDistance < 0.25) {
                 double chunkDistance = pos - middleColumn;
                 if (Math.abs(chunkDistance) < Math.abs(smallestChunkDistance) && !onChunk) {
@@ -116,6 +125,13 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         }
 
         avgPos = ((currentSmallestChunkStart + currentSmallestChunkEnd)/2.0 - middleColumn)/middleColumn;
+
+        if (debug) {
+            int avgPosPixel = (int) ((avgPos + 1.0)/2.0 * rowLength);
+            for (int row = 0; row < 100; row++) {
+                distanceViewerMat.put(row, avgPosPixel, new double[]{255, 0, 0, 255});
+            }
+        }
 
         switch (viewportStage) {
             case 0: return input;
