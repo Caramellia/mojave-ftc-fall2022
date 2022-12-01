@@ -224,6 +224,19 @@ public class BaseController extends LinearOpMode {
         //applyMovement();
     }
 
+    public void setCurrentDisplacementAs(VectorF reference) {
+        displacementMatrix = OpenGLMatrix.identityMatrix();
+        displacementMatrix.translate(
+                reference.get(0),
+                reference.get(1),
+                reference.get(2)
+        );
+        displacementMatrix.multiply(rotationMatrix.transposed());
+        VectorF tempDisplacement = displacementMatrix.getTranslation();
+        displacement = new VectorF(tempDisplacement.get(0), tempDisplacement.get(1), tempDisplacement.get(2), 0);
+        //telemetry.addData("Displacement", displacementMatrix.formatAsTransform(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES));
+    }
+
     public VectorF getWorldMovementVector() {
         return new VectorF(0, 0, 0, 1);
     }

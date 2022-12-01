@@ -121,7 +121,11 @@ public class BaseAutoOp extends BaseController {
                 phaseEndReached = true;
                 phaseStartTime = runtime.seconds();
                 phase += 1;
-                phases.get(phase).Init.run();
+                try {
+                    phases.get(phase).Init.run();
+                } catch (Exception err) {
+                    telemetry.addData("what", "???");
+                }
                 phaseEndReachedTime = runtime.seconds();
                 telemetry.addData("yeah", "buddy");
             }

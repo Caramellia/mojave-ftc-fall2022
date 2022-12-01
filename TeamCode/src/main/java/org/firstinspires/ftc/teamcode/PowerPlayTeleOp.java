@@ -35,6 +35,9 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.opencv.core.Size;
+import org.openftc.easyopencv.OpenCvCamera;
+import org.openftc.easyopencv.OpenCvCameraRotation;
 
 @TeleOp(name="PowerPlay TeleOp", group="Linear Opmode")
 public class PowerPlayTeleOp extends BaseController {
@@ -62,12 +65,32 @@ public class PowerPlayTeleOp extends BaseController {
 
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
+    private ColorDetectionPipeline colorDetectionPipeline;
 
     @Override
     public void runOpMode() {
 
         telemetry.addData("Controls", CONTROL_STRING);
         initialize();
+
+        colorDetectionPipeline = new ColorDetectionPipeline(new Size(50, 240), 0.0, 0.1, new double[]{255, 255, 0});
+
+        camera.setPipeline(colorDetectionPipeline);
+        camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
+        {
+            @Override
+            public void onOpened()
+            {
+                camera.startStreaming(320,240, OpenCvCameraRotation.UPRIGHT);
+            }
+
+            @Override
+            public void onError(int errorCode)
+            {
+
+            }
+        });
+
         waitForStart();
         runtime.reset();
 
@@ -191,6 +214,9 @@ public class PowerPlayTeleOp extends BaseController {
                     setClawOpen(!clawOpen);
                 }
             }
+
+            double poleDir = colorDetectionPipeline.getColorDir();
+            telemetry.addData("Pole Dir", poleDir);
 
             // OTHER TELEMETRY AND POST-CALCULATION STUFF
             {

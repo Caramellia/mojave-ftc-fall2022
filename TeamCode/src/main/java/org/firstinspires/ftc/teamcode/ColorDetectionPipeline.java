@@ -10,8 +10,8 @@ import java.util.ArrayList;
 
 public class ColorDetectionPipeline extends OpenCvPipeline {
 
-    public double highRowHeight;
-    public double lowRowHeight;
+    public double highRowHeight = 0.0;
+    public double lowRowHeight = 0.1;
     private Mat targetRowViewerMat;
     private Mat distanceViewerMat;
     private Mat input;
@@ -20,7 +20,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     private double parsedRowHeight;
     private int viewportStage = 0;
     private int maxViewportStage = 2;
-    private int viewerHeight = 100;
+    private int viewerHeight = 10;
     private Size targetRes;
     private double[] targetColor;
     public double[] readColor;
@@ -28,8 +28,8 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     private boolean debug = true;
 
     public ColorDetectionPipeline(Size targetRes, double highTargetRowHeight, double lowTargetRowHeight, double[] targetColor) {
-        this.highRowHeight = highTargetRowHeight;
-        this.lowRowHeight = lowTargetRowHeight;
+        highRowHeight = highTargetRowHeight;
+        lowRowHeight = lowTargetRowHeight;
         this.targetColor = targetColor;
         this.targetRes = targetRes;
         this.input = new Mat(targetRes, CvType.CV_8UC4);
@@ -48,8 +48,13 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         }
     }
 
+    public void setRowHeight(double high, double low) {
+        highRowHeight = high;
+        lowRowHeight = low;
+    }
+
     public void setTargetColor(double[] color) {
-        targetColor = color;
+        this.targetColor = color;
     }
 
     @Override
@@ -77,7 +82,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         for (int column = 0; column < rowLength; column++) {
             double[] color = squishedInput.get(0, column);
             if (debug) {
-                for (int row = 0; row < 100; row++) {
+                for (int row = 0; row < viewerHeight; row++) {
                     targetRowViewerMat.put(row, column, color.clone());
                 }
             }
@@ -96,6 +101,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         final double colorDistanceRange = maxColorDistance - minColorDistance;
         double middleColumn = rowLength/2.0;
         boolean onChunk = false;
+        boolean onSmallChunk = false;
         double smallestChunkDistance = 10000;
         double currentSmallestChunkStart = 0;
         double currentSmallestChunkEnd = 0;
@@ -105,7 +111,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
             double normalizedColorDistance = (colorDistance - minColorDistance)/colorDistanceRange;
             if (debug) {
                 double viewerColor = normalizedColorDistance < 0.25 ? 255 : 0;
-                for (int row = 0; row < 100; row++) {
+                for (int row = 0; row < viewerHeight; row++) {
                     distanceViewerMat.put(row, i, new double[]{viewerColor, viewerColor, viewerColor, 255});
                 }
             }
@@ -114,13 +120,27 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
                 if (Math.abs(chunkDistance) < Math.abs(smallestChunkDistance) && !onChunk) {
                     smallestChunkDistance = chunkDistance;
                     currentSmallestChunkStart = pos;
+                    onSmallChunk = true;
                 }
                 onChunk = true;
             } else if (onChunk) {
                 onChunk = false;
-                if (smallestChunkDistance == (currentSmallestChunkStart - middleColumn)) {
+                if (onSmallChunk) {
+                    onSmallChunk = false;
                     currentSmallestChunkEnd = pos - 1.0;
+                    double chunkDistance = currentSmallestChunkEnd - middleColumn;
+                    if (Math.abs(chunkDistance) < Math.abs(smallestChunkDistance)) {
+                        smallestChunkDistance = chunkDistance;
+                    }
                 }
+            }
+        }
+        if (onSmallChunk) {
+            onSmallChunk = false;
+            currentSmallestChunkEnd = rowLength - 1.0;
+            double chunkDistance = currentSmallestChunkEnd - middleColumn;
+            if (Math.abs(chunkDistance) < Math.abs(smallestChunkDistance)) {
+                smallestChunkDistance = chunkDistance;
             }
         }
 
@@ -128,8 +148,9 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
         if (debug) {
             int avgPosPixel = (int) ((avgPos + 1.0)/2.0 * rowLength);
-            for (int row = 0; row < 100; row++) {
+            for (int row = 0; row < viewerHeight; row++) {
                 distanceViewerMat.put(row, avgPosPixel, new double[]{255, 0, 0, 255});
+                targetRowViewerMat.put(row, avgPosPixel, new double[]{255, 0, 0, 255});
             }
         }
 

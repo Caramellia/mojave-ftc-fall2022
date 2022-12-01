@@ -55,7 +55,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     private final double FIELD_SIZE = 141.345 * IN_TO_MM;
     private final double TILE_SIZE = FIELD_SIZE/6.0;
     private final double SLOW_BEGIN_THRESHOLD = 3 * IN_TO_MM;
-    private final double PHASE_CHANGE_THRESHOLD = 0.5 * IN_TO_MM;
+    private final double PHASE_CHANGE_THRESHOLD = 0.35 * IN_TO_MM;
     private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(1.0);
     private double phaseStartTime = 0;
     private VectorF desiredDisplacement = displacement;
@@ -190,7 +190,8 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
 
         float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.0f);
-        for (int i = 0; i < 3; i++) {
+        int reps = 1;
+        for (int i = 0; i < reps; i++) {
             // go in front of pole and raise arm
             addPhase(() -> {
                 setTargetRotation(0.0);
@@ -199,7 +200,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
             }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
 
             // calibrate pos
-            colorDetectionPipeline.setTargetColor(new double[]{1, 1, 0});
+            colorDetectionPipeline.setTargetColor(new double[]{255, 255, 0});
             colorDetectionPipeline.highRowHeight = 0.0;
             colorDetectionPipeline.lowRowHeight = 0.1;
             addPhase(() -> {}, () -> {
@@ -208,11 +209,13 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                 setMovementVectorRelativeToTargetOrientation(
                         new VectorF((float) dir * 0.5f, 0, 0, 0)
                 );
-            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 5/50);
+
+            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.1);
 
             // go further forward now that the arm is raised
             addPhase(() -> {
-                displacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
+                double displacementY = displacement.get(1);
+                setCurrentDisplacementAs(new VectorF(midLeftDst, (float) displacementY, 0, 0));
                 desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
             }, MovementPhaseStep, MovementPhaseCheck);
 
@@ -222,27 +225,28 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                 if (runtime.seconds() - phaseStartTime > 0.5) {
                     setClawOpen(true);
                 }
-            }, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 1.0);
+            }, () -> (runtime.seconds() - phaseStartTime > 1.0));
 
             // back up
             addPhase(() -> desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
+            addPhase(() -> desiredDisplacement = new VectorF(0, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
 
-            if (i < 2) {
+            if (i < reps - 1) {
                 addPhase(() -> {
                     setTargetRotation(-RIGHT_ANGLE);
                     setArmStage(0);
-                }, () -> {}, RotationPhaseCheck);
+                    setClawOpen(true);
+                }, () -> {}, () -> RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
                 // align with cones
-                colorDetectionPipeline.setTargetColor(new double[]{0, 0, 1});
-                colorDetectionPipeline.highRowHeight = 0.6;
-                colorDetectionPipeline.lowRowHeight = 0.7;
+                colorDetectionPipeline.setTargetColor(new double[]{0, 0, 255});
+                colorDetectionPipeline.setRowHeight(0.6, 0.7);
                 addPhase(() -> {}, () -> {
                     setMovementVectorRelativeToTargetOrientation(
                             new VectorF((float) colorDetectionPipeline.getColorDir() * 0.5f, 0, 0, 0)
                     );
-                }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 5/50);
+                }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.1);
                 addPhase(() -> {
-                    displacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
+                    //displacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
                     desiredDisplacement = new VectorF((float) TILE_SIZE, fwdDst + initialOffset, 0, 0);
                     goalArmEncoderValue = -225;
                     setClawOpen(true);
@@ -259,6 +263,8 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                 }, MovementPhaseStep, MovementPhaseCheck);
             }
         }
+
+        setArmStage(0);
 
         // go to zone
         float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst));
