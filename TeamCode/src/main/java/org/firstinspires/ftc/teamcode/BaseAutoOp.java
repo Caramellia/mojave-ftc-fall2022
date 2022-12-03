@@ -62,7 +62,7 @@ public class BaseAutoOp extends BaseController {
     private final double IN_TO_MM = 25.4;
     private final double FIELD_SIZE = 141.345 * IN_TO_MM;
     private final double TILE_SIZE = FIELD_SIZE/6.0;
-    private double phaseStartTime = 0;
+    protected double phaseStartTime = 0;
     private boolean phaseEndReached = false;
     private double phaseEndReachedTime = 0;
     private final boolean goToNextPhase = true;

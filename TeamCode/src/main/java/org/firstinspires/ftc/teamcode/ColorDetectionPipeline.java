@@ -20,12 +20,14 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     private double parsedRowHeight;
     private int viewportStage = 0;
     private int maxViewportStage = 2;
-    private int viewerHeight = 10;
+    private int viewerHeight = 5;
     private Size targetRes;
-    private double[] targetColor;
+    public double[] targetColor;
     public double[] readColor;
     private double avgPos = 0;
     private boolean debug = true;
+    public int highRow;
+    public int lowRow;
 
     public ColorDetectionPipeline(Size targetRes, double highTargetRowHeight, double lowTargetRowHeight, double[] targetColor) {
         highRowHeight = highTargetRowHeight;
@@ -63,8 +65,8 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
 
         // downsample the input
         Imgproc.resize(highresInput, input, input.size(), 0, 0, Imgproc.INTER_AREA);
-        int highRow = (int) Math.round(highRowHeight * input.rows());
-        int lowRow = (int) Math.round(lowRowHeight * input.rows());
+        highRow = (int) Math.round(highRowHeight * input.rows());
+        lowRow = (int) Math.round(lowRowHeight * input.rows());
         // get the submat of the input
         inputSubmat = input.submat(highRow, lowRow, 0, input.cols());
         Imgproc.resize(inputSubmat, squishedInput, squishedInput.size(), 0, 0, Imgproc.INTER_AREA);

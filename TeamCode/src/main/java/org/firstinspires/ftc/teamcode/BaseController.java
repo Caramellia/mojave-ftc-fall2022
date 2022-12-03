@@ -260,7 +260,7 @@ public class BaseController extends LinearOpMode {
                 DcMotor motor = wheelMap[i];
                 motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
                 motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+                motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
             }
 
             wheelMap[0].setDirection(DcMotor.Direction.REVERSE);

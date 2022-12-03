@@ -49,15 +49,16 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
     // rotation stuff
     private int phase = 0;
-    private final double MAX_SPEED_MULT = 0.45;
-    private final double MAX_ACCEL_TIME = 0.5;
+    private double INITIAL_MAX_SPEED_MULT = 0.6;
+    private double MAX_SPEED_MULT = INITIAL_MAX_SPEED_MULT;
+    private double INITIAL_MAX_ACCEL_TIME = 0.5;
+    private double MAX_ACCEL_TIME = INITIAL_MAX_ACCEL_TIME;
     private final double IN_TO_MM = 25.4;
     private final double FIELD_SIZE = 141.345 * IN_TO_MM;
     private final double TILE_SIZE = FIELD_SIZE/6.0;
     private final double SLOW_BEGIN_THRESHOLD = 3 * IN_TO_MM;
     private final double PHASE_CHANGE_THRESHOLD = 0.35 * IN_TO_MM;
     private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(1.0);
-    private double phaseStartTime = 0;
     private VectorF desiredDisplacement = displacement;
 
     float leftDst = (float) (-TILE_SIZE * 1.0);
@@ -134,7 +135,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     double cx = 402.145;
     double cy = 221.506;
     double tagsize = 0.166;
-    int zone = -1;
+    //int zone = -1;
 
     // dist: 62.5 inches
 
@@ -190,88 +191,113 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
 
         float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.0f);
-        int reps = 1;
+        int reps = 2;
         for (int i = 0; i < reps; i++) {
             // go in front of pole and raise arm
             addPhase(() -> {
+                colorDetectionPipeline.setTargetColor(new double[]{255, 255, 0});
+                colorDetectionPipeline.highRowHeight = 0.0;
+                colorDetectionPipeline.lowRowHeight = 0.1;
                 setTargetRotation(0.0);
                 desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
                 setArmStage(3);
-            }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
+            }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && RotationPhaseCheck.get() && realArmEncoderValue < -600);
 
             // calibrate pos
-            colorDetectionPipeline.setTargetColor(new double[]{255, 255, 0});
-            colorDetectionPipeline.highRowHeight = 0.0;
-            colorDetectionPipeline.lowRowHeight = 0.1;
-            addPhase(() -> {}, () -> {
+
+            addPhase(() -> {
+                MAX_SPEED_MULT = 0.25;
+                MAX_ACCEL_TIME = 1.0;
+            }, () -> {
                 double dir = colorDetectionPipeline.getColorDir();
+                double movement = Math.max(Math.abs(dir * 0.5), 0.1) * Math.signum(dir);
+                telemetry.addData("Mid Left Dst", midLeftDst);
                 telemetry.addData("Pole Dir", dir);
                 setMovementVectorRelativeToTargetOrientation(
-                        new VectorF((float) dir * 0.5f, 0, 0, 0)
+                        new VectorF((float) movement, 0, 0, 0)
                 );
-
-            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.1);
+            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.05 && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
 
             // go further forward now that the arm is raised
             addPhase(() -> {
                 double displacementY = displacement.get(1);
                 setCurrentDisplacementAs(new VectorF(midLeftDst, (float) displacementY, 0, 0));
-                desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 7.0f * (float) IN_TO_MM, 0, 0);
+                desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 5.25f * (float) IN_TO_MM, 0, 0);
             }, MovementPhaseStep, MovementPhaseCheck);
 
             // open claw
             addPhase(() -> {
             }, () -> {
-                if (runtime.seconds() - phaseStartTime > 0.5) {
+                if (runtime.seconds() - phaseStartTime > 0.1) {
                     setClawOpen(true);
                 }
-            }, () -> (runtime.seconds() - phaseStartTime > 1.0));
+            }, () -> (runtime.seconds() - phaseStartTime > 0.2));
 
             // back up
-            addPhase(() -> desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
-            addPhase(() -> desiredDisplacement = new VectorF(0, fwdDst + initialOffset, 0, 0), MovementPhaseStep, MovementPhaseCheck);
+            addPhase(() -> {
+                desiredDisplacement = new VectorF(midLeftDst, (float) (fwdDst + initialOffset - 1.0 * IN_TO_MM), 0, 0);
+            }, InitialMovementPhaseStep, MovementPhaseCheck);
 
             if (i < reps - 1) {
+                // move to 0 pos
                 addPhase(() -> {
-                    setTargetRotation(-RIGHT_ANGLE);
+                    desiredDisplacement = new VectorF(0, fwdDst + initialOffset, 0, 0);
                     setArmStage(0);
+                }, EndMovementPhaseStep, MovementPhaseCheck);
+                addPhase(() -> {
+                    MAX_SPEED_MULT = INITIAL_MAX_SPEED_MULT;
+                    MAX_ACCEL_TIME = INITIAL_MAX_ACCEL_TIME;
+                    colorDetectionPipeline.setTargetColor(new double[]{0, 0, 255});
+                    colorDetectionPipeline.setRowHeight(0.6, 0.7);
+                    setTargetRotation(-RIGHT_ANGLE);
                     setClawOpen(true);
+                    goalArmEncoderValue = -225;
                 }, () -> {}, () -> RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
                 // align with cones
-                colorDetectionPipeline.setTargetColor(new double[]{0, 0, 255});
-                colorDetectionPipeline.setRowHeight(0.6, 0.7);
+
                 addPhase(() -> {}, () -> {
-                    setMovementVectorRelativeToTargetOrientation(
-                            new VectorF((float) colorDetectionPipeline.getColorDir() * 0.5f, 0, 0, 0)
-                    );
-                }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.1);
+                    double dir = colorDetectionPipeline.getColorDir();
+                    double movement = Math.max(Math.abs(dir * 0.5), 0.1) * Math.signum(dir);
+                    double[] targetColor = colorDetectionPipeline.targetColor;
+                    telemetry.addData("Pole Dir", dir);
+                    telemetry.addData("Target Color", "%s %s %s", targetColor[0], targetColor[1], targetColor[2]);
+                    telemetry.addData("High Row", colorDetectionPipeline.highRow);
+                        telemetry.addData("Low Row", colorDetectionPipeline.lowRow);
+                setLocalMovementVector(
+                        new VectorF((float) movement, 0, 0, 0)
+                );
+
+            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.05 && runtime.seconds() - phaseStartTime > 0.5);
+            addPhase(() -> {
+                double displacementX = displacement.get(0);
+                setCurrentDisplacementAs(new VectorF((float) displacementX, (float) fwdDst + initialOffset, 0, 0));
+                desiredDisplacement = new VectorF((float) (TILE_SIZE + 4.0 * IN_TO_MM), fwdDst + initialOffset, 0, 0);
+                setClawOpen(true);
+            }, MovementPhaseStep, MovementPhaseCheck);
+            addPhase(() -> {
+                setClawOpen(false);
+            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.2);
+            addPhase(() -> {
+                setArmStage(1);
+            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.35);
+            addPhase(() -> {
+                desiredDisplacement = new VectorF(0, fwdDst + initialOffset, 0, 0);
+            }, MovementPhaseStep, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 0.2);
                 addPhase(() -> {
-                    //displacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
-                    desiredDisplacement = new VectorF((float) TILE_SIZE, fwdDst + initialOffset, 0, 0);
                     goalArmEncoderValue = -225;
-                    setClawOpen(true);
-                }, MovementPhaseStep, MovementPhaseCheck);
-                addPhase(() -> {
-                    setClawOpen(false);
-                }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.5);
-                addPhase(() -> {
-                    setArmStage(1);
-                }, () -> {}, () -> runtime.seconds() - phaseStartTime > 1.0);
-                addPhase(() -> {
-                    desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
-                    goalArmEncoderValue = -225;
-                }, MovementPhaseStep, MovementPhaseCheck);
+                    setTargetRotation(0.0);
+                }, () -> {}, RotationPhaseCheck);
             }
         }
 
-        setArmStage(0);
-
         // go to zone
-        float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst));
         addPhase(() -> {
+            MAX_SPEED_MULT = INITIAL_MAX_SPEED_MULT;
+            MAX_ACCEL_TIME = INITIAL_MAX_ACCEL_TIME;
             setArmStage(0);
+            float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst));
             desiredDisplacement =  new VectorF(zoneDst, fwdDst + initialOffset, 0, 0);
-        }, EndMovementPhaseStep, MovementPhaseCheck);
+        }, MovementPhaseStep, () -> false);
 
     }
 
