@@ -97,6 +97,10 @@ public class BaseAutoOp extends BaseController {
     public void runOpMode() {
 
         super.initialize();
+        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
+        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
+        telemetry.addData("Camera", camera);
+
         this.autoOpInitialize();
         
         // left distance: 25 in

@@ -303,10 +303,6 @@ public class BaseController extends LinearOpMode {
             clawServoR.setPosition(openClawPosR);
         }
 
-        int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
-        camera = OpenCvCameraFactory.getInstance().createWebcam(hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
-        telemetry.addData("Camera", camera);
-
         // INITIALIZATION TELEMETRY
         {
             telemetry.addData("Gyroscope Status", imu.isGyroCalibrated() ? "Calibrated." : "Not calibrated.");

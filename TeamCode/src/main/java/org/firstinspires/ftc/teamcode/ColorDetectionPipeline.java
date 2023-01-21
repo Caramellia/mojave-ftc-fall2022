@@ -25,7 +25,7 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     public double[] targetColor;
     public double[] readColor;
     private double avgPos = 0;
-    private boolean debug = true;
+    private boolean debug = false;
     public int highRow;
     public int lowRow;
 
