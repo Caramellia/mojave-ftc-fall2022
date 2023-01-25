@@ -75,22 +75,6 @@ public class PowerPlayTeleOp extends BaseController {
 
         colorDetectionPipeline = new ColorDetectionPipeline(new Size(50, 240), 0.0, 0.1, new double[]{255, 255, 0});
 
-        camera.setPipeline(colorDetectionPipeline);
-        camera.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener()
-        {
-            @Override
-            public void onOpened()
-            {
-                camera.startStreaming(320,240, OpenCvCameraRotation.UPRIGHT);
-            }
-
-            @Override
-            public void onError(int errorCode)
-            {
-
-            }
-        });
-
         waitForStart();
         runtime.reset();
 

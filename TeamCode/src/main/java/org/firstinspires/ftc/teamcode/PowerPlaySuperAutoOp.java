@@ -44,7 +44,7 @@ import org.openftc.easyopencv.OpenCvCameraRotation;
 import java.util.ArrayList;
 import java.util.function.Supplier;
 
-@Autonomous(name = "Fast AutoOp Blue", group = "Linear Opmode")
+@Autonomous(name = "Fast AutoOp Blue, Right", group = "Linear Opmode")
 public class PowerPlaySuperAutoOp extends BaseAutoOp {
 
     // rotation stuff
@@ -217,7 +217,8 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                 setMovementVectorRelativeToTargetOrientation(
                         new VectorF((float) movement, 0, 0, 0)
                 );
-            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.025 && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
+            }, () -> (Math.abs(colorDetectionPipeline.getColorDir()) < 0.025 || runtime.seconds() - phaseStartTime > 5)
+                    && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
 
             // go further forward now that the arm is raised
             addPhase(() -> {
@@ -254,7 +255,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                     MAX_ACCEL_TIME = INITIAL_MAX_ACCEL_TIME;
                     colorDetectionPipeline.setTargetColor(coneColor);
                     colorDetectionPipeline.setRowHeight(0.6, 0.7);
-                    setTargetRotation(-RIGHT_ANGLE);
+                    setTargetRotation(RIGHT_ANGLE * Math.signum(leftDst));
                     setClawOpen(true);
                     goalArmEncoderValue = -275 - (reps - finalI - 1) * 100;
                 }, () -> {}, () -> RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
@@ -272,20 +273,20 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                         new VectorF((float) movement, 0, 0, 0)
                 );
 
-            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.05 && runtime.seconds() - phaseStartTime > 0.5);
+            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.05 && runtime.seconds() - phaseStartTime > 0.5 || runtime.seconds() - phaseStartTime > 5);
             addPhase(() -> {
                 double displacementX = displacement.get(0);
                 setCurrentDisplacementAs(new VectorF((float) displacementX, (float) fwdDst + initialOffset, 0, 0));
                 setLocalMovementVector(new VectorF(0,0,0,0));
-                desiredDisplacement = new VectorF((float) (TILE_SIZE + 4.65 * IN_TO_MM), fwdDst + initialOffset, 0, 0);
+                desiredDisplacement = new VectorF((float) (-(TILE_SIZE + 4.65 * IN_TO_MM) * Math.signum(leftDst)), fwdDst + initialOffset, 0, 0);
                 setClawOpen(true);
             }, MovementPhaseStep, MovementPhaseCheck);
             addPhase(() -> {
                 setClawOpen(false);
-            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.2);
+            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.55);
             addPhase(() -> {
                 setArmStage(1);
-            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.35);
+            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.40);
             addPhase(() -> {
                 desiredDisplacement = new VectorF(0, fwdDst + initialOffset, 0, 0);
             }, MovementPhaseStep, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 0.2);

@@ -6,13 +6,13 @@ import androidx.annotation.RequiresApi;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
-@Autonomous(name = "Fast AutoOp Red, Right", group = "Linear Opmode")
-public class PowerPlaySuperAutoOp_R extends PowerPlaySuperAutoOp {
+@Autonomous(name = "Fast AutoOp Blue, Left", group = "Linear Opmode")
+public class PowerPlaySuperAutoOp_BL extends PowerPlaySuperAutoOp {
 
     @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     public void runOpMode() {
-        this.coneColor = new double[]{255, 0, 0};
+        this.leftDst *= -1;
         super.runOpMode();
     }
 
