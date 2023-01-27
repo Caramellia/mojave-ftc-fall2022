@@ -158,7 +158,7 @@ public class PowerPlayTeleOp extends BaseController {
                     } else {
                         //setTurnVelocity(0);
                         applyTargetRotation();
-                        setMovementVectorRelativeToTargetOrientation(rawMoveVector);
+                        setWorldMovementVector(rawMoveVector);
                     }
 
                 } else { // free movement
@@ -189,6 +189,7 @@ public class PowerPlayTeleOp extends BaseController {
                 }
                 double armDelta = (currentGamepadState.dpad_up ? 1 : 0) - (currentGamepadState.dpad_down ? 1 : 0)
                         + (currentGamepad2State.dpad_up ? 1 : 0) - (currentGamepad2State.dpad_down ? 1 : 0);
+                int lastGoalArmEncoderValue = goalArmEncoderValue;
                 goalArmEncoderValue -= armDelta * 750.0 * deltaTime;
             }
 

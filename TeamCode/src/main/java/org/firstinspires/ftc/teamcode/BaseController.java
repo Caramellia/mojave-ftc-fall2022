@@ -138,6 +138,14 @@ public class BaseController extends LinearOpMode {
         return (Math.round(num/interval) * interval);
     }
 
+    public double map(double n, double oldMin, double oldMax, double newMin, double newMax, boolean clamp) {
+        double newValue = ((n - oldMin)/(oldMax - oldMin)) * (newMax - newMin) + newMin;
+        if (clamp) {
+            newValue = Math.max(Math.min(newValue, newMax), newMin);
+        }
+        return newValue;
+    }
+
     // arm
     public void setClawOpen(boolean val) {
         clawOpen = val;
@@ -158,7 +166,7 @@ public class BaseController extends LinearOpMode {
     public void applyMovement() {
         float axialMovement = movementVector.get(1);
         float lateralMovement = movementVector.get(0);
-        double maxPowerMagnitude = 1;
+        double maxPowerMagnitude = map(realArmEncoderValue, -1300, -3000, 1, 0.5, true);
         for (int i = 0; i < 4; i++) {
             wheelPowers[i] = (axialMovementMap[i] * axialMovement + lateralMovementMap[i] * lateralMovement + turnMap[i] * turnVelocity);
             maxPowerMagnitude = Math.max(maxPowerMagnitude, wheelPowers[i]);
