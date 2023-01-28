@@ -217,6 +217,10 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                 setMovementVectorRelativeToTargetOrientation(
                         new VectorF((float) movement, 0, 0, 0)
                 );
+                // "crash" protection
+                if (displacement.subtracted(desiredDisplacement).magnitude() > 10 * IN_TO_MM) {
+                    goToPhase("park");
+                }
             }, () -> (Math.abs(colorDetectionPipeline.getColorDir()) < 0.025 || runtime.seconds() - phaseStartTime > 5)
                     && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
 
@@ -260,7 +264,6 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                     goalArmEncoderValue = -275 - (reps - finalI - 1) * 100;
                 }, () -> {}, () -> RotationPhaseCheck.get() && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
                 // align with cones
-
                 addPhase(() -> {}, () -> {
                     double dir = colorDetectionPipeline.getColorDir();
                     double movement = Math.max(Math.abs(dir * 0.5), 0.05) * Math.signum(dir);
@@ -268,28 +271,31 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                     telemetry.addData("Pole Dir", dir);
                     telemetry.addData("Target Color", "%s %s %s", targetColor[0], targetColor[1], targetColor[2]);
                     telemetry.addData("High Row", colorDetectionPipeline.highRow);
-                        telemetry.addData("Low Row", colorDetectionPipeline.lowRow);
-                setLocalMovementVector(
-                        new VectorF((float) movement, 0, 0, 0)
-                );
-
-            }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.05 && runtime.seconds() - phaseStartTime > 0.5 || runtime.seconds() - phaseStartTime > 5);
-            addPhase(() -> {
-                double displacementX = displacement.get(0);
-                setCurrentDisplacementAs(new VectorF((float) displacementX, (float) fwdDst + initialOffset, 0, 0));
-                setLocalMovementVector(new VectorF(0,0,0,0));
-                desiredDisplacement = new VectorF((float) (-(TILE_SIZE + 4.65 * IN_TO_MM) * Math.signum(leftDst)), fwdDst + initialOffset, 0, 0);
-                setClawOpen(true);
-            }, MovementPhaseStep, MovementPhaseCheck);
-            addPhase(() -> {
-                setClawOpen(false);
-            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.55);
-            addPhase(() -> {
-                setArmStage(1);
-            }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.40);
-            addPhase(() -> {
-                desiredDisplacement = new VectorF(0, fwdDst + initialOffset, 0, 0);
-            }, MovementPhaseStep, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 0.2);
+                    telemetry.addData("Low Row", colorDetectionPipeline.lowRow);
+                    setLocalMovementVector(
+                            new VectorF((float) movement, 0, 0, 0)
+                    );
+                    // "crash" protection
+                    if (displacement.subtracted(desiredDisplacement).magnitude() > 10 * IN_TO_MM) {
+                        goToPhase("park");
+                    }
+                }, () -> Math.abs(colorDetectionPipeline.getColorDir()) < 0.05 && runtime.seconds() - phaseStartTime > 0.5 || runtime.seconds() - phaseStartTime > 5);
+                addPhase(() -> {
+                    double displacementX = displacement.get(0);
+                    setCurrentDisplacementAs(new VectorF((float) displacementX, (float) fwdDst + initialOffset, 0, 0));
+                    setLocalMovementVector(new VectorF(0,0,0,0));
+                    desiredDisplacement = new VectorF((float) (-(TILE_SIZE + 4.65 * IN_TO_MM) * Math.signum(leftDst)), fwdDst + initialOffset, 0, 0);
+                    setClawOpen(true);
+                }, MovementPhaseStep, MovementPhaseCheck);
+                addPhase(() -> {
+                    setClawOpen(false);
+                }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.55);
+                addPhase(() -> {
+                    setArmStage(1);
+                }, () -> {}, () -> runtime.seconds() - phaseStartTime > 0.40);
+                addPhase(() -> {
+                    desiredDisplacement = new VectorF(0, fwdDst + initialOffset, 0, 0);
+                }, MovementPhaseStep, () -> MovementPhaseCheck.get() && runtime.seconds() - phaseStartTime > 0.2);
                 addPhase(() -> {
                     goalArmEncoderValue = -225;
                     setTargetRotation(0.0);
@@ -302,9 +308,10 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
             MAX_SPEED_MULT = INITIAL_MAX_SPEED_MULT;
             MAX_ACCEL_TIME = INITIAL_MAX_ACCEL_TIME;
             setArmStage(0);
+            setTargetRotation(0.0);
             float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst));
             desiredDisplacement =  new VectorF(zoneDst, fwdDst + initialOffset, 0, 0);
-        }, MovementPhaseStep, () -> false);
+        }, MovementPhaseStep, () -> false, "park");
 
     }
 
