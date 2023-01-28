@@ -61,9 +61,6 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     private final double ROTATION_PHASE_CHANGE_THRESHOLD = Math.toRadians(1.0);
     private VectorF desiredDisplacement = displacement;
 
-    float leftDst = (float) (-TILE_SIZE * 1.0);
-    float fwdDst = (float) (-TILE_SIZE * 2.0);
-
     Supplier<Boolean> MovementPhaseCheck = () -> {
         VectorF diff = desiredDisplacement.subtracted(displacement);
         return diff.magnitude() < PHASE_CHANGE_THRESHOLD;
@@ -138,6 +135,12 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
     public double[] coneColor = new double[]{0, 0, 255};
     //int zone = -1;
 
+    // variable params
+    float leftDst = (float) (-TILE_SIZE * 1.0);
+    float fwdDst = (float) (-TILE_SIZE * 2.0);
+    boolean placeFirstConeImmediately = false;
+    int reps = 2;
+
     // dist: 62.5 inches
 
     @RequiresApi(api = Build.VERSION_CODES.N)
@@ -180,72 +183,108 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
         }, () -> zone != -1);
 
         float initialOffset = (float) (-2.5 * IN_TO_MM);
+        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.0f);
 
+        if (placeFirstConeImmediately) {
+            addPhase(() -> {
+                desiredDisplacement = new VectorF(midLeftDst, initialOffset, 0, 0);
+            }, InitialMovementPhaseStep, MovementPhaseCheck);
+            addPhase(() -> {
+                desiredDisplacement = new VectorF(midLeftDst, initialOffset - 4.9f * (float) (IN_TO_MM), 0, 0);
+            }, EndMovementPhaseStep, MovementPhaseCheck);
+
+            // open claw
+            addPhase(() -> {
+                goalArmEncoderValue = -1000;
+            }, () -> {
+            }, () -> (Math.abs(goalArmEncoderValue - realArmEncoderValue) < 20));
+            addPhase(() -> {
+                setClawOpen(true);
+            }, () -> {
+            }, () -> (runtime.seconds() - phaseStartTime > 0.65));
+            addPhase(() -> {
+                setArmStage(1);
+            }, () -> {
+            }, () -> (Math.abs(goalArmEncoderValue - realArmEncoderValue) < 50));
+
+            // back up
+            addPhase(() -> {
+                desiredDisplacement = new VectorF(midLeftDst, initialOffset, 0, 0);
+            }, InitialMovementPhaseStep, MovementPhaseCheck);
+        }
         // lower arm, move to the left
         addPhase(() -> {
             desiredDisplacement = new VectorF(leftDst, initialOffset, 0, 0);
             setArmStage(0);
             goalArmEncoderValue = -210;
-        }, InitialMovementPhaseStep, MovementPhaseCheck);
+        }, placeFirstConeImmediately ? IntermediateMovementPhaseStep : InitialMovementPhaseStep, MovementPhaseCheck);
 
         // go forward
         addPhase(() -> desiredDisplacement = new VectorF(leftDst, fwdDst + initialOffset, 0, 0), IntermediateMovementPhaseStep, MovementPhaseCheck);
 
-        float midLeftDst = (float) ((TILE_SIZE/2.0) * Math.signum(leftDst) * 1.0f);
-        int reps = 2;
+
+        reps += placeFirstConeImmediately ? 1 : 0;
         for (int i = 0; i < reps; i++) {
-            // go in front of pole and raise arm
-            addPhase(() -> {
-                colorDetectionPipeline.setTargetColor(new double[]{255, 255, 0});
-                colorDetectionPipeline.highRowHeight = 0.0;
-                colorDetectionPipeline.lowRowHeight = 0.1;
-                setTargetRotation(0.0);
-                desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
-                setArmStage(3);
-            }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && RotationPhaseCheck.get() && realArmEncoderValue < -600);
 
-            // calibrate pos
+            if (!placeFirstConeImmediately || i > 0) {
 
-            addPhase(() -> {
-                MAX_SPEED_MULT = 0.25;
-                MAX_ACCEL_TIME = 1.0;
-            }, () -> {
-                double dir = colorDetectionPipeline.getColorDir();
-                double movement = Math.max(Math.abs(dir * 0.5), 0.05) * Math.signum(dir);
-                telemetry.addData("Mid Left Dst", midLeftDst);
-                telemetry.addData("Pole Dir", dir);
-                setMovementVectorRelativeToTargetOrientation(
-                        new VectorF((float) movement, 0, 0, 0)
-                );
-                // "crash" protection
-                if (displacement.subtracted(desiredDisplacement).magnitude() > 10 * IN_TO_MM) {
-                    goToPhase("park");
-                }
-            }, () -> (Math.abs(colorDetectionPipeline.getColorDir()) < 0.025 || runtime.seconds() - phaseStartTime > 5)
-                    && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
+                // go in front of pole and raise arm
+                addPhase(() -> {
+                    colorDetectionPipeline.setTargetColor(new double[]{255, 255, 0});
+                    colorDetectionPipeline.highRowHeight = 0.0;
+                    colorDetectionPipeline.lowRowHeight = 0.1;
+                    setTargetRotation(0.0);
+                    desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset, 0, 0);
+                    setArmStage(3);
+                }, EndMovementPhaseStep, () -> MovementPhaseCheck.get() && RotationPhaseCheck.get() && realArmEncoderValue < -600);
 
-            // go further forward now that the arm is raised
-            addPhase(() -> {
-                double displacementY = displacement.get(1);
-                setCurrentDisplacementAs(new VectorF(midLeftDst, (float) displacementY, 0, 0));
-                desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 4.9f * (float) IN_TO_MM, 0, 0);
-            }, MovementPhaseStep, MovementPhaseCheck);
+                // calibrate pos
 
-            // open claw
-            addPhase(() -> {
-                goalArmEncoderValue = -2750;
-            }, () -> {}, () -> (Math.abs(goalArmEncoderValue - realArmEncoderValue) < 20));
-            addPhase(() -> {
-                setClawOpen(true);
-            }, () -> {}, () -> (runtime.seconds() - phaseStartTime > 0.65));
-            addPhase(() -> {
-                setArmStage(3);
-            }, () -> {}, () -> (Math.abs(goalArmEncoderValue - realArmEncoderValue) < 50));
+                addPhase(() -> {
+                    MAX_SPEED_MULT = 0.25;
+                    MAX_ACCEL_TIME = 1.0;
+                }, () -> {
+                    double dir = colorDetectionPipeline.getColorDir();
+                    double movement = Math.max(Math.abs(dir * 0.5), 0.05) * Math.signum(dir);
+                    telemetry.addData("Mid Left Dst", midLeftDst);
+                    telemetry.addData("Pole Dir", dir);
+                    setMovementVectorRelativeToTargetOrientation(
+                            new VectorF((float) movement, 0, 0, 0)
+                    );
+                    // "crash" protection
+                    if (displacement.subtracted(desiredDisplacement).magnitude() > 10 * IN_TO_MM) {
+                        goToPhase("park");
+                    }
+                }, () -> (Math.abs(colorDetectionPipeline.getColorDir()) < 0.025 || runtime.seconds() - phaseStartTime > 5)
+                        && Math.abs(goalArmEncoderValue - realArmEncoderValue) < 40);
 
-            // back up
-            addPhase(() -> {
-                desiredDisplacement = new VectorF(midLeftDst, (float) (fwdDst + initialOffset - 1.0 * IN_TO_MM), 0, 0);
-            }, InitialMovementPhaseStep, MovementPhaseCheck);
+                // go further forward now that the arm is raised
+                addPhase(() -> {
+                    double displacementY = displacement.get(1);
+                    setCurrentDisplacementAs(new VectorF(midLeftDst, (float) displacementY, 0, 0));
+                    desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 4.9f * (float) IN_TO_MM, 0, 0);
+                }, MovementPhaseStep, MovementPhaseCheck);
+
+                // open claw
+                addPhase(() -> {
+                    goalArmEncoderValue = -2750;
+                }, () -> {
+                }, () -> (Math.abs(goalArmEncoderValue - realArmEncoderValue) < 20));
+                addPhase(() -> {
+                    setClawOpen(true);
+                }, () -> {
+                }, () -> (runtime.seconds() - phaseStartTime > 0.65));
+                addPhase(() -> {
+                    setArmStage(3);
+                }, () -> {
+                }, () -> (Math.abs(goalArmEncoderValue - realArmEncoderValue) < 50));
+
+                // back up
+                addPhase(() -> {
+                    desiredDisplacement = new VectorF(midLeftDst, (float) (fwdDst + initialOffset - 1.0 * IN_TO_MM), 0, 0);
+                }, InitialMovementPhaseStep, MovementPhaseCheck);
+
+            }
 
             if (i < reps - 1) {
                 // move to 0 pos
