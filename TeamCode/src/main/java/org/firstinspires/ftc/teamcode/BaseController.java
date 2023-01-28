@@ -37,7 +37,6 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.ReadWriteFile;
 
-import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.matrices.OpenGLMatrix;
 import org.firstinspires.ftc.robotcore.external.matrices.VectorF;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
@@ -46,7 +45,6 @@ import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.firstinspires.ftc.robotcore.internal.system.AppUtil;
 import org.openftc.easyopencv.OpenCvCamera;
-import org.openftc.easyopencv.OpenCvCameraFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,11 +62,11 @@ public class BaseController extends LinearOpMode {
 
     // arm stuff
     private DcMotor armMotor;
-    private int armMinEncoderValue = -3075;
-    private int armMaxEncoderValue = 0; // for now, change it once we get a concrete value
+    public int ARM_MIN_ENCODER_VALUE = -3075;
+    public int ARM_MAX_ENCODER_VALUE = 0; // for now, change it once we get a concrete value
     public int goalArmEncoderValue = 0;
     public int armStage = 0;
-    private int[] armStageEncoderValues = {0, -1400, -2200, -3075};
+    public int[] armStageEncoderValues = {0, -1400, -2200, -3075};
     public int realArmEncoderValue = 0;
     private final double FULL_ARM_POWER_ENCODER_TICK_THRESHOLD = 20.0;
 
@@ -120,6 +118,18 @@ public class BaseController extends LinearOpMode {
     // generic math functions
     public double modulo(double a, double b) {
         return  (a % b + b) % b;
+    }
+
+    public double map(double num, double oldMin, double oldMax, double newMin, double newMax, boolean clamp) {
+        double newValue = (num - oldMin)/(oldMax - oldMin) * (newMax - newMin) + newMin;
+        if (clamp) {
+            newValue = clamp(newValue, newMin, newMax);
+        }
+        return newValue;
+    }
+
+    public double clamp(double num, double min, double max) {
+        return Math.max(Math.max(Math.min(Math.min(num, max), min), min), max);
     }
 
     public double normalizeAngle(double angle, AngleUnit angleUnit) {
@@ -400,7 +410,7 @@ public class BaseController extends LinearOpMode {
 
         // ARM HANDLING
         {
-            goalArmEncoderValue = Math.min(Math.max(goalArmEncoderValue, armMinEncoderValue), armMaxEncoderValue);
+            goalArmEncoderValue = (int) clamp(goalArmEncoderValue, ARM_MIN_ENCODER_VALUE, ARM_MAX_ENCODER_VALUE);
             // recalculate arm stage
             /*for (int i = armStageEncoderValues.length - 1; i >= 0; i--) {
                 if (i == 0) {

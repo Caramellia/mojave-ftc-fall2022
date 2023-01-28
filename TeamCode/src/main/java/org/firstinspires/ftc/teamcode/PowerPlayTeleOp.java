@@ -63,9 +63,34 @@ public class PowerPlayTeleOp extends BaseController {
     private double freeMoveSpeed = 0.25; // multiplier for strafing speeds in "free movement" mode
     private double freeTurnSpeed = 0.25; // multiplier for turning speeds in "free movement" mode
 
+    // arm stuff
+    private double goalSmoothArmEncoderValue = 0;
+    private double smoothArmEncoderValue = 0;
+    private double smoothArmEncoderVelocity = 0;
+    private double decelThresholdEntranceVelocity = 0;
+    private boolean isWithinDecelThreshold = false;
+    private final double ARM_ENCODER_ACCEL = 6000; // ticks per second per second
+    private final double ARM_ENCODER_TURNAROUND_ACCEL = ARM_ENCODER_ACCEL * 2;
+    private final double ARM_ENCODER_MAX_VELOCITY = 3000; // ticks per second
+    private final double ARM_ENCODER_DECEL_THRESHOLD = 200; // tick distance before the arm begins to decelerate
+    private final double MIN_DECEL_VELOCITY = ARM_ENCODER_MAX_VELOCITY/5;
+    private double dpadArmEncoderFactor = 0;
+
     // rotation stuff
     private final double RIGHT_ANGLE = Math.PI/2.0;
     private ColorDetectionPipeline colorDetectionPipeline;
+
+    @Override
+    public void setArmStage(int stage) {
+        int lastStage = armStage;
+        armStage = (int) clamp(stage, 0, armStageEncoderValues.length - 1);
+        smoothArmEncoderValue = smoothArmEncoderValue + dpadArmEncoderFactor;
+        dpadArmEncoderFactor = 0;
+        goalSmoothArmEncoderValue = armStageEncoderValues[armStage];
+        if (lastStage > 0 && stage == 0 && clawOpen) {
+            setClawOpen(false);
+        }
+    }
 
     @Override
     public void runOpMode() {
@@ -187,10 +212,46 @@ public class PowerPlayTeleOp extends BaseController {
                 if (goDown) {
                     setArmStage(armStage - 1);
                 }
+
+                double lastSmoothArmEncoderValue = smoothArmEncoderValue;
+                boolean lastIsWithinDecelThreshold = isWithinDecelThreshold;
+                isWithinDecelThreshold = Math.abs(smoothArmEncoderValue - goalSmoothArmEncoderValue) <= ARM_ENCODER_DECEL_THRESHOLD // if we're within the threshold...
+                    && Math.signum(smoothArmEncoderVelocity) * Math.signum(goalSmoothArmEncoderValue - smoothArmEncoderValue) > 0 // AND moving toward the goal...
+                    && Math.abs(smoothArmEncoderVelocity) > MIN_DECEL_VELOCITY; // AND above the min decel velocity
+                if (isWithinDecelThreshold
+                    && !lastIsWithinDecelThreshold) {
+                    decelThresholdEntranceVelocity = smoothArmEncoderVelocity;
+                }
+                if (isWithinDecelThreshold) { // if we need to decelerate
+                    smoothArmEncoderVelocity = Math.abs(decelThresholdEntranceVelocity) * map(
+                            Math.abs(smoothArmEncoderValue - goalSmoothArmEncoderValue),
+                            ARM_ENCODER_DECEL_THRESHOLD, 0,
+                            1, 0,
+                            true);
+                    smoothArmEncoderVelocity = clamp(smoothArmEncoderVelocity, MIN_DECEL_VELOCITY, ARM_ENCODER_MAX_VELOCITY) // ensures that we're not going tooooo slow
+                            * Math.signum(goalSmoothArmEncoderValue - smoothArmEncoderValue);
+                } else { // otherwise we need to accelerate
+                    double accelDir = Math.signum(goalSmoothArmEncoderValue - smoothArmEncoderValue); // sign effectively normalizes the value
+                    smoothArmEncoderVelocity = smoothArmEncoderVelocity + accelDir * deltaTime * (
+                            Math.abs(accelDir - Math.signum(smoothArmEncoderVelocity)) < 0.05 ? ARM_ENCODER_ACCEL : ARM_ENCODER_TURNAROUND_ACCEL
+                    );
+                    smoothArmEncoderVelocity = clamp(smoothArmEncoderVelocity, -ARM_ENCODER_MAX_VELOCITY, ARM_ENCODER_MAX_VELOCITY);
+                }
+                smoothArmEncoderValue += smoothArmEncoderVelocity * deltaTime;
+                // if we're already at the goal point
+                if ((smoothArmEncoderValue - goalSmoothArmEncoderValue) * (lastSmoothArmEncoderValue - goalSmoothArmEncoderValue) <= 0
+                        || smoothArmEncoderValue == goalSmoothArmEncoderValue) {
+                    // then bring it to a halt
+                    smoothArmEncoderValue = goalSmoothArmEncoderValue;
+                    smoothArmEncoderVelocity = 0;
+                }
+
                 double armDelta = (currentGamepadState.dpad_up ? 1 : 0) - (currentGamepadState.dpad_down ? 1 : 0)
                         + (currentGamepad2State.dpad_up ? 1 : 0) - (currentGamepad2State.dpad_down ? 1 : 0);
-                int lastGoalArmEncoderValue = goalArmEncoderValue;
-                goalArmEncoderValue -= armDelta * 750.0 * deltaTime;
+                dpadArmEncoderFactor -= armDelta * 750.0 * deltaTime;
+                double finalValue = clamp(smoothArmEncoderValue + dpadArmEncoderFactor, 0, ARM_MIN_ENCODER_VALUE);
+                dpadArmEncoderFactor = finalValue - smoothArmEncoderValue; // calculate the difference now that the final encoder value is clamped
+                goalArmEncoderValue = (int) finalValue;
             }
 
             // CLAW HANDLING
