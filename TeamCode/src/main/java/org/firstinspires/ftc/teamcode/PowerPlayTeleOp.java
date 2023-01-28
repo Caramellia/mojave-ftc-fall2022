@@ -69,7 +69,7 @@ public class PowerPlayTeleOp extends BaseController {
     private double smoothArmEncoderVelocity = 0;
     private double decelThresholdEntranceVelocity = 0;
     private boolean isWithinDecelThreshold = false;
-    private final double ARM_ENCODER_ACCEL = 6000; // ticks per second
+    private final double ARM_ENCODER_ACCEL = 6000; // ticks per second per second
     private final double ARM_ENCODER_TURNAROUND_ACCEL = ARM_ENCODER_ACCEL * 2;
     private final double ARM_ENCODER_MAX_VELOCITY = 3000; // ticks per second
     private final double ARM_ENCODER_DECEL_THRESHOLD = 200; // tick distance before the arm begins to decelerate
@@ -232,7 +232,9 @@ public class PowerPlayTeleOp extends BaseController {
                             * Math.signum(goalSmoothArmEncoderValue - smoothArmEncoderValue);
                 } else { // otherwise we need to accelerate
                     double accelDir = Math.signum(goalSmoothArmEncoderValue - smoothArmEncoderValue); // sign effectively normalizes the value
-                    smoothArmEncoderVelocity = smoothArmEncoderVelocity + accelDir * deltaTime * ARM_ENCODER_ACCEL;
+                    smoothArmEncoderVelocity = smoothArmEncoderVelocity + accelDir * deltaTime * (
+                            Math.abs(accelDir - Math.signum(smoothArmEncoderVelocity)) < 0.05 ? ARM_ENCODER_ACCEL : ARM_ENCODER_TURNAROUND_ACCEL
+                    );
                     smoothArmEncoderVelocity = clamp(smoothArmEncoderVelocity, -ARM_ENCODER_MAX_VELOCITY, ARM_ENCODER_MAX_VELOCITY);
                 }
                 smoothArmEncoderValue += smoothArmEncoderVelocity * deltaTime;
