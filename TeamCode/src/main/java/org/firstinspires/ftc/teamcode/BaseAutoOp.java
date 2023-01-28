@@ -39,6 +39,8 @@ import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.function.Supplier;
 
 class Phase {
@@ -72,9 +74,36 @@ public class BaseAutoOp extends BaseController {
     float fwdDst = (float) (-TILE_SIZE * 2.0);
 
     public ArrayList<Phase> phases = new ArrayList<>();
+    public HashMap<String, Phase> phasesById = new HashMap<>();
+    public HashMap<String, Integer> phaseIndicesById = new HashMap<>();
 
     public void addPhase(Runnable init, Runnable step, Supplier<Boolean> check) {
         phases.add(new Phase(init, step, check));
+    }
+
+    public void addPhase(Runnable init, Runnable step, Supplier<Boolean> check, String id) {
+        Phase newPhase = new Phase(init, step, check);
+        phases.add(newPhase);
+        phaseIndicesById.put(id, phases.size() - 1);
+    }
+
+    private void goToPhaseNum(int phaseNum) {
+        phaseEndReached = true;
+        phaseStartTime = runtime.seconds();
+        phase = phaseNum;
+        try {
+            phases.get(phase).Init.run();
+        } catch (Exception err) {
+            telemetry.addData("what", "???");
+        }
+        phaseEndReachedTime = runtime.seconds();
+    }
+
+    public void goToPhase(String id) {
+        if (phaseIndicesById.get(id) == null) {
+            return;
+        }
+        goToPhaseNum(phaseIndicesById.get(id));
     }
 
     public void autoOpInitialize () {
@@ -122,16 +151,7 @@ public class BaseAutoOp extends BaseController {
             phaseFunc.Step.run();
             telemetry.addData("go?", phaseFunc.Check.get());
             if (phaseFunc.Check.get() && phases.size() > phase + 1) {
-                phaseEndReached = true;
-                phaseStartTime = runtime.seconds();
-                phase += 1;
-                try {
-                    phases.get(phase).Init.run();
-                } catch (Exception err) {
-                    telemetry.addData("what", "???");
-                }
-                phaseEndReachedTime = runtime.seconds();
-                telemetry.addData("yeah", "buddy");
+                goToPhaseNum(phase + 1);
             }
 
             telemetry.addData("Go To Next Phase?", goToNextPhase);
