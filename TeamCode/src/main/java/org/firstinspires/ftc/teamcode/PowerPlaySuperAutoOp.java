@@ -191,11 +191,11 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
             }, InitialMovementPhaseStep, MovementPhaseCheck);
             addPhase(() -> {
                 desiredDisplacement = new VectorF(midLeftDst, initialOffset - 4.9f * (float) (IN_TO_MM), 0, 0);
-            }, EndMovementPhaseStep, MovementPhaseCheck);
+            }, MovementPhaseStep, MovementPhaseCheck);
 
             // open claw
             addPhase(() -> {
-                goalArmEncoderValue = -1000;
+                goalArmEncoderValue = -800;
             }, () -> {
             }, () -> (Math.abs(goalArmEncoderValue - realArmEncoderValue) < 20));
             addPhase(() -> {
@@ -262,7 +262,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                 addPhase(() -> {
                     double displacementY = displacement.get(1);
                     setCurrentDisplacementAs(new VectorF(midLeftDst, (float) displacementY, 0, 0));
-                    desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 4.9f * (float) IN_TO_MM, 0, 0);
+                    desiredDisplacement = new VectorF(midLeftDst, fwdDst + initialOffset - 4.3f * (float) IN_TO_MM, 0, 0);
                 }, MovementPhaseStep, MovementPhaseCheck);
 
                 // open claw
@@ -323,7 +323,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
                     double displacementX = displacement.get(0);
                     setCurrentDisplacementAs(new VectorF((float) displacementX, (float) fwdDst + initialOffset, 0, 0));
                     setLocalMovementVector(new VectorF(0,0,0,0));
-                    desiredDisplacement = new VectorF((float) (-(TILE_SIZE + 4.65 * IN_TO_MM) * Math.signum(leftDst)), fwdDst + initialOffset, 0, 0);
+                    desiredDisplacement = new VectorF((float) (-(TILE_SIZE + 5.0 * IN_TO_MM) * Math.signum(leftDst)), fwdDst + initialOffset, 0, 0);
                     setClawOpen(true);
                 }, MovementPhaseStep, MovementPhaseCheck);
                 addPhase(() -> {
@@ -348,7 +348,7 @@ public class PowerPlaySuperAutoOp extends BaseAutoOp {
             MAX_ACCEL_TIME = INITIAL_MAX_ACCEL_TIME;
             setArmStage(0);
             setTargetRotation(0.0);
-            float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) : zone == 2 ? 0.0 : Math.abs(leftDst));
+            float zoneDst = (float) (zone == 1 ? -Math.abs(leftDst) * 1.075 : zone == 2 ? 0.0 : Math.abs(leftDst) * 1.075);
             desiredDisplacement =  new VectorF(zoneDst, fwdDst + initialOffset, 0, 0);
         }, MovementPhaseStep, () -> false, "park");
 

@@ -129,7 +129,9 @@ public class BaseController extends LinearOpMode {
     }
 
     public double clamp(double num, double min, double max) {
-        return Math.max(Math.max(Math.min(Math.min(num, max), min), min), max);
+        double max2 = Math.max(min, max);
+        double min2 = Math.min(min, max);
+        return Math.min(Math.max(num, min2), max2);
     }
 
     public double normalizeAngle(double angle, AngleUnit angleUnit) {
@@ -146,14 +148,6 @@ public class BaseController extends LinearOpMode {
 
     public double roundToNearest(double num, double interval) {
         return (Math.round(num/interval) * interval);
-    }
-
-    public double map(double n, double oldMin, double oldMax, double newMin, double newMax, boolean clamp) {
-        double newValue = ((n - oldMin)/(oldMax - oldMin)) * (newMax - newMin) + newMin;
-        if (clamp) {
-            newValue = Math.max(Math.min(newValue, newMax), newMin);
-        }
-        return newValue;
     }
 
     // arm

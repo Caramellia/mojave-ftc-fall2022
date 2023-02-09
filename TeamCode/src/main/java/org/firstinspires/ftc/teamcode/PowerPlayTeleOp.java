@@ -183,7 +183,7 @@ public class PowerPlayTeleOp extends BaseController {
                     } else {
                         //setTurnVelocity(0);
                         applyTargetRotation();
-                        setWorldMovementVector(rawMoveVector);
+                        setMovementVectorRelativeToTargetOrientation(rawMoveVector);
                     }
 
                 } else { // free movement
@@ -238,6 +238,8 @@ public class PowerPlayTeleOp extends BaseController {
                     smoothArmEncoderVelocity = clamp(smoothArmEncoderVelocity, -ARM_ENCODER_MAX_VELOCITY, ARM_ENCODER_MAX_VELOCITY);
                 }
                 smoothArmEncoderValue += smoothArmEncoderVelocity * deltaTime;
+                telemetry.addData("Encoder Vel", smoothArmEncoderVelocity);
+                telemetry.addData("Encoder Smooth", smoothArmEncoderValue);
                 // if we're already at the goal point
                 if ((smoothArmEncoderValue - goalSmoothArmEncoderValue) * (lastSmoothArmEncoderValue - goalSmoothArmEncoderValue) <= 0
                         || smoothArmEncoderValue == goalSmoothArmEncoderValue) {

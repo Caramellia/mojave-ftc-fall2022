@@ -18,14 +18,13 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     private Mat inputSubmat;
     private Mat squishedInput;
     private double parsedRowHeight;
-    private int viewportStage = 0;
-    private int maxViewportStage = 2;
-    private int viewerHeight = 5;
+    public int viewportStage = 0;
+    private int viewerHeight = 10;
     private Size targetRes;
     public double[] targetColor;
     public double[] readColor;
     private double avgPos = 0;
-    private boolean debug = false;
+    public boolean debug = true;
     public int highRow;
     public int lowRow;
 
@@ -45,9 +44,6 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
     public void onViewportTapped()
     {
         viewportStage += 1;
-        if (viewportStage > maxViewportStage) {
-            viewportStage = 0;
-        }
     }
 
     public void setRowHeight(double high, double low) {
@@ -157,9 +153,13 @@ public class ColorDetectionPipeline extends OpenCvPipeline {
         }
 
         switch (viewportStage) {
-            case 0: return input;
-            case 1: return targetRowViewerMat;
-            case 2: return distanceViewerMat;
+            case 0: return highresInput;
+            case 1: return input;
+            case 2: return inputSubmat;
+            case 3: return targetRowViewerMat;
+            case 4: return distanceViewerMat;
+            case 5: viewportStage = 0;
+                return highresInput;
         }
         return distanceViewerMat;
     }
